@@ -3631,7 +3631,15 @@ export default function App() {
     setTrainerState(prof.trainer_state || {});
     COSMETICS.back = (prof.cosmetics && prof.cosmetics.back) || "classic";
     COSMETICS.felt = (prof.cosmetics && prof.cosmetics.felt) || null;
-    if (prof.streak_day === new Date().toISOString().slice(0, 10)) setDaily({ drill: true, session: true });
+    const _today = new Date().toISOString().slice(0, 10);
+    const _drillDoneToday = (() => { try { return localStorage.getItem("riq_daily_drill_" + _today) === "true"; } catch { return false; } })();
+    if (prof.streak_day === _today) {
+      // Full streak day already banked — both drill and session are complete.
+      setDaily({ drill: true, session: true });
+    } else if (_drillDoneToday) {
+      // Drill done today but session not yet — restore drill credit only.
+      setDaily((d) => ({ ...d, drill: true }));
+    }
     // Restore an in-progress review if the user refreshed mid-review.
     const savedReview = (() => { try { const s = localStorage.getItem("riq_active_review"); return s ? JSON.parse(s) : null; } catch { return null; } })();
     if (savedReview) { setSessions([savedReview]); setScreen("review"); } else { setScreen("home"); }
@@ -4026,6 +4034,9 @@ export default function App() {
       const finishedDrill = (r.mode === "daily" || r.mode === "firstrun") && Object.keys(r.results).length >= r.list.length;
       if (r.mode === "daily" && Object.keys(r.results).length >= r.list.length) {
         const perfect = r.list.every((_, i) => r.results[i]);
+        // Stamp today's date so drill credit survives a refresh even before the
+        // 10-hand session is done (streak_day is only written once both are complete).
+        try { localStorage.setItem("riq_daily_drill_" + new Date().toISOString().slice(0, 10), "true"); } catch {}
         setDaily((d) => ({ ...d, drill: true, repair: d.repair || perfect }));
       }
       if (finishedDrill) {
