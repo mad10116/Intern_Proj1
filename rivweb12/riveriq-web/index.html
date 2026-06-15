@@ -27,8 +27,10 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
-      // register the service worker for offline shell + instant loads
-      if ("serviceWorker" in navigator) {
+      // Only register the service worker in production.
+      // On localhost the SW's cache-first strategy intercepts Vite's module
+      // requests and serves stale files, which breaks HMR / Fast Refresh.
+      if ("serviceWorker" in navigator && location.hostname !== "localhost") {
         window.addEventListener("load", () => {
           navigator.serviceWorker.register("/sw.js").catch(() => {});
         });

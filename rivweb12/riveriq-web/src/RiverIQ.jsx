@@ -1304,7 +1304,7 @@ function NavBar({ screen, go }) {
     { id: "profile", label: "Profile", glyph: "♥" },
   ];
   return (
-    <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, display: "flex", background: "rgba(8,18,13,.96)", borderTop: "1px solid " + T.line, backdropFilter: "blur(8px)", zIndex: 30, paddingBottom: "env(safe-area-inset-bottom)" }}>
+    <nav style={{ position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", background: "rgba(8,18,13,.96)", borderTop: "1px solid " + T.line, backdropFilter: "blur(8px)", zIndex: 30, paddingBottom: "env(safe-area-inset-bottom)" }}>
       {items.map((it) => {
         const playScreens = ["play", "lobby", "review", "replay", "mpsetup", "mptable", "puzzle", "puzzlereview", "mpreview"];
         const learnScreens = ["learn", "module"];
@@ -3692,19 +3692,29 @@ export default function App() {
     }
   }, [pendingJoin]);
 
-  const startSession = useCallback((tier) => {
+  const startSession = useCallback(async (tier) => {
     const t = tier || BOT_TIERS[1];
     setCurrentTier(t);
     recordedRef.current = new Set();
     setHands([]);
     setDbSessionId(null);
+    dbSessionRef.current = null;
     const players = [
       { name: user?.name || "You", stack: START_STACK, isHero: true },
       ...buildOpponents(t.id, Math.random),
     ];
+    // Await the session INSERT before dealing so that dbSessionRef.current is
+    // populated before the first hand-result effect fires. Without this, the
+    // async .then() resolved too late and the first hand was never persisted.
+    if (profile) {
+      const rows = await dbInsert("sessions", { user_id: profile.id });
+      if (rows && rows[0]) {
+        dbSessionRef.current = rows[0].id; // write ref immediately for the hand-recording effect
+        setDbSessionId(rows[0].id);        // keep state in sync for endSession
+      }
+    }
     setGame(dealHand(players, Math.floor(Math.random() * 6), 0));
     setScreen("play");
-    if (profile) dbInsert("sessions", { user_id: profile.id }).then((rows) => rows && rows[0] && setDbSessionId(rows[0].id));
   }, [user, profile]);
 
   const nextHand = useCallback(() => {
