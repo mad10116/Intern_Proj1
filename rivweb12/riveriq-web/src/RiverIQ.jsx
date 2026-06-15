@@ -3643,6 +3643,27 @@ export default function App() {
     // Restore an in-progress review if the user refreshed mid-review.
     const savedReview = (() => { try { const s = localStorage.getItem("riq_active_review"); return s ? JSON.parse(s) : null; } catch { return null; } })();
     if (savedReview) { setSessions([savedReview]); setScreen("review"); } else { setScreen("home"); }
+    // Boot-time recovery: if a previous session's DB write failed mid-network, retry it silently.
+    (() => {
+      try {
+        const pending = localStorage.getItem("riq_pending_rating_sync");
+        if (!pending) return;
+        const payload = JSON.parse(pending);
+        const { rating: r, sessionId: sid, timestamp: ts, sessionClose } = payload;
+        if (!r || !prof.id) return;
+        if (Date.now() - ts > 86400000) { localStorage.removeItem("riq_pending_rating_sync"); return; }
+        (async () => {
+          try {
+            if (sid && sessionClose) await dbUpdate("sessions", `id=eq.${sid}`, sessionClose);
+            await dbUpdate("users", `id=eq.${prof.id}`, { skill_rating: r });
+            localStorage.removeItem("riq_pending_rating_sync");
+            console.log("[boot recovery] pending rating sync succeeded");
+          } catch (e) {
+            console.warn("[boot recovery] retry failed, will try again next boot", e);
+          }
+        })();
+      } catch {}
+    })();
     const past = await dbSelect("sessions", `user_id=eq.${prof.id}&select=hands_played,net_chips&order=started_at.desc&limit=200`);
     // Edge rating migration: initialise Glicko parameters once, from existing session history
     {
@@ -3880,53 +3901,68 @@ export default function App() {
       if (profile) dbUpsert("learn_progress", { user_id: profile.id, module_id: key, completed_at: new Date().toISOString(), drill_score: 100 }, "user_id,module_id");
     }
     if (analysis.stats.hands >= 10) setDaily((d) => ({ ...d, session: true }));
-    if (dbSessionId) {
-      dbUpdate("sessions", `id=eq.${dbSessionId}`, { ended_at: new Date().toISOString(), hands_played: analysis.stats.hands, net_chips: analysis.stats.net })
-        .then(() => sbFetch("/functions/v1/profile-sync", { method: "POST", body: JSON.stringify({ session_id: dbSessionId }) }).catch(() => {}))
-        .then(() => dbSelect("player_profiles", `user_id=eq.${profile?.id}&select=*`).then((r) => r[0] && setTendencies(r[0])));
-    }
     saveTrainer(scheduleLeakReviews({
       ...trainerRef.current,
       decisions: (trainerRef.current.decisions || 0) + analysis.stats.decisions,
       ...(edgeState ? { phi: edgeState.phi, sigma: edgeState.sigma, rolling_var: edgeState.rollingVar, rating_n: edgeState.n } : {}),
     }, analysis.leaks.map((l) => familyOf(l.ruleId))));
-    if (profile) {
-      dbUpdate("users", `id=eq.${profile.id}`, { skill_rating: newRating });
-      // data collection: every scored decision, with context + verdict + outcome, for future validation/training
-      if (edge.decisions.length) {
-        const rows = edge.decisions.map((d) => ({
-          user_id: profile.id,
-          session_id: dbSessionId || null,
-          hand_no: d.handNo,
-          street: d.street,
-          decision_type: d.type,
-          hero_action: d.action,
-          hero_cards: hands.find((h) => h.handNo === d.handNo) ? hands.find((h) => h.handNo === d.handNo).heroCards.map(cardStr).join("") : null,
-          board: (() => { const h = hands.find((x) => x.handNo === d.handNo); return h ? h.board.map(cardStr).join("") : null; })(),
-          position: (() => { const h = hands.find((x) => x.handNo === d.handNo); return h ? h.pos : null; })(),
-          pot: Math.round(d.pot),
-          bet_facing: Math.round(d.toCall),
-          bet_made: d.amount != null ? Math.round(d.amount) : null,
-          hero_equity: d.eq != null ? +d.eq.toFixed(3) : null,
-          threshold: d.threshold != null ? +d.threshold.toFixed(3) : null,
-          margin: +d.margin.toFixed(4),
-          pot_weight: +d.wPot.toFixed(4),
-          weighted_score: +d.score.toFixed(5),
-          opp_profile: d.opp,
-          players_in_hand: d.live + 1,
-          hand_net: d.handNet,
-          showdown: d.showdown,
-        }));
-        for (let i = 0; i < rows.length; i += 50) dbInsert("decision_log", rows.slice(i, i + 50));
+    // ---- Persist session stats + rating to Supabase; cache locally on any network failure ----
+    (async () => {
+      try {
+        if (dbSessionId) {
+          await dbUpdate("sessions", `id=eq.${dbSessionId}`, { ended_at: new Date().toISOString(), hands_played: analysis.stats.hands, net_chips: analysis.stats.net });
+          sbFetch("/functions/v1/profile-sync", { method: "POST", body: JSON.stringify({ session_id: dbSessionId }) }).catch(() => {});
+          dbSelect("player_profiles", `user_id=eq.${profile?.id}&select=*`).then((r) => r[0] && setTendencies(r[0]));
+        }
+        if (profile) {
+          await dbUpdate("users", `id=eq.${profile.id}`, { skill_rating: newRating });
+          // data collection: every scored decision, with context + verdict + outcome, for future validation/training
+          if (edge.decisions.length) {
+            const rows = edge.decisions.map((d) => ({
+              user_id: profile.id,
+              session_id: dbSessionId || null,
+              hand_no: d.handNo,
+              street: d.street,
+              decision_type: d.type,
+              hero_action: d.action,
+              hero_cards: hands.find((h) => h.handNo === d.handNo) ? hands.find((h) => h.handNo === d.handNo).heroCards.map(cardStr).join("") : null,
+              board: (() => { const h = hands.find((x) => x.handNo === d.handNo); return h ? h.board.map(cardStr).join("") : null; })(),
+              position: (() => { const h = hands.find((x) => x.handNo === d.handNo); return h ? h.pos : null; })(),
+              pot: Math.round(d.pot),
+              bet_facing: Math.round(d.toCall),
+              bet_made: d.amount != null ? Math.round(d.amount) : null,
+              hero_equity: d.eq != null ? +d.eq.toFixed(3) : null,
+              threshold: d.threshold != null ? +d.threshold.toFixed(3) : null,
+              margin: +d.margin.toFixed(4),
+              pot_weight: +d.wPot.toFixed(4),
+              weighted_score: +d.score.toFixed(5),
+              opp_profile: d.opp,
+              players_in_hand: d.live + 1,
+              hand_net: d.handNet,
+              showdown: d.showdown,
+            }));
+            for (let i = 0; i < rows.length; i += 50) dbInsert("decision_log", rows.slice(i, i + 50));
+          }
+          dbSelect("leaks", `user_id=eq.${profile.id}&select=leak_type,sessions_tracked`).then((existing) => {
+            const prior = Object.fromEntries((existing || []).map((e) => [e.leak_type, e.sessions_tracked || 1]));
+            analysis.leaks.forEach((l) => {
+              l.history = (prior[l.title] || 0) + 1;
+              dbUpsert("leaks", { user_id: profile.id, leak_type: l.title, deviation_pct: l.costBB, sessions_tracked: l.history, updated_at: new Date().toISOString() }, "user_id,leak_type");
+            });
+          });
+        }
+      } catch (err) {
+        console.error("[endSession] DB write failed — caching locally:", err);
+        try {
+          localStorage.setItem("riq_pending_rating_sync", JSON.stringify({
+            rating: newRating,
+            sessionId: dbSessionId,
+            timestamp: Date.now(),
+            sessionClose: dbSessionId ? { ended_at: new Date().toISOString(), hands_played: analysis.stats.hands, net_chips: analysis.stats.net } : null,
+          }));
+        } catch {}
       }
-      dbSelect("leaks", `user_id=eq.${profile.id}&select=leak_type,sessions_tracked`).then((existing) => {
-        const prior = Object.fromEntries((existing || []).map((e) => [e.leak_type, e.sessions_tracked || 1]));
-        analysis.leaks.forEach((l) => {
-          l.history = (prior[l.title] || 0) + 1;
-          dbUpsert("leaks", { user_id: profile.id, leak_type: l.title, deviation_pct: l.costBB, sessions_tracked: l.history, updated_at: new Date().toISOString() }, "user_id,leak_type");
-        });
-      });
-    }
+    })();
   }, [hands, rating, dbSessionId, profile, lifetime.total, lastPlan, currentTier]);
 
   const openModule = (id) => { setModuleId(id); setScreen("module"); };
