@@ -4008,6 +4008,21 @@ export default function App() {
     setScreen(id);
   };
 
+  // Guard: if a data-dependent screen loses its required state (e.g. token drop,
+  // stale navigation, or refresh mid-flow), redirect to the nearest safe screen
+  // rather than silently rendering the generic HomeScreen fallback.
+  useEffect(() => {
+    if (!user) return;
+    if (screen === "play" && !game) setScreen("lobby");
+    else if (screen === "review" && !lastSession) setScreen("home");
+    else if (screen === "replay" && !replayHand) setScreen("review");
+    else if (screen === "puzzle" && !puzzleRun) setScreen("home");
+    else if (screen === "puzzlereview" && !puzzleReview) setScreen("home");
+    else if (screen === "module" && !moduleId) setScreen("learn");
+    else if (screen === "mptable" && !mpTable) setScreen("lobby");
+    else if (screen === "mpreview" && !mpReviewId) setScreen("lobby");
+  }, [screen, user, game, lastSession, replayHand, puzzleRun, puzzleReview, moduleId, mpTable, mpReviewId]);
+
   let body;
   if (!user) body = <AuthScreen onAuthed={handleAuthed} pendingJoin={pendingJoin} />;
   else if (screen === "home") body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={(s) => (s === "lobby" ? setScreen("lobby") : go(s))} streak={streak} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} onDailyDrill={() => {
@@ -4112,7 +4127,7 @@ export default function App() {
     setProfile((p) => ({ ...p, cosmetics: cos }));
     if (profile) dbUpdate("users", `id=eq.${profile.id}`, { cosmetics: cos });
   }} />;
-  else body = <HomeScreen user={user || { name: "Player" }} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={go} streak={streak} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} onDailyDrill={() => {
+  else body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={go} streak={streak} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} onDailyDrill={() => {
     const list = dailyPuzzles();
     const due = dueReviews(trainerRef.current);
     if (due.length) list[0] = genPuzzle(mulberry32(Date.now()), due[0], levelFor(trainerRef.current, due[0]));
