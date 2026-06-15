@@ -2514,6 +2514,9 @@ function LeakCard({ l, i, openModule }) {
 function ReviewScreen({ session, rating, band, go, openModule, openReplay, lifetimeBuckets }) {
   const [showAllHands, setShowAllHands] = useState(false);
   const [showBuckets, setShowBuckets] = useState(false);
+  // Clear the persisted review on unmount — covers the Done button, NavBar
+  // navigation, and any other exit path so the user is never stuck in review.
+  useEffect(() => () => { try { localStorage.removeItem("riq_active_review"); } catch {} }, []);
   const s = session.stats;
   const buckets = (lifetimeBuckets && lifetimeBuckets.length >= 3 ? lifetimeBuckets : session.buckets) || [];
   const worst = buckets[0], best = buckets[buckets.length - 1];
@@ -3629,7 +3632,9 @@ export default function App() {
     COSMETICS.back = (prof.cosmetics && prof.cosmetics.back) || "classic";
     COSMETICS.felt = (prof.cosmetics && prof.cosmetics.felt) || null;
     if (prof.streak_day === new Date().toISOString().slice(0, 10)) setDaily({ drill: true, session: true });
-    setScreen("home");
+    // Restore an in-progress review if the user refreshed mid-review.
+    const savedReview = (() => { try { const s = localStorage.getItem("riq_active_review"); return s ? JSON.parse(s) : null; } catch { return null; } })();
+    if (savedReview) { setSessions([savedReview]); setScreen("review"); } else { setScreen("home"); }
     const past = await dbSelect("sessions", `user_id=eq.${prof.id}&select=hands_played,net_chips&order=started_at.desc&limit=200`);
     // Edge rating migration: initialise Glicko parameters once, from existing session history
     {
@@ -3838,6 +3843,9 @@ export default function App() {
       analysis.ratingDelta = 0; // too few contested decisions to move the rating
     }
     analysis.moment = sessionMoment(analysis, analysis.edge, analysis.ratingDelta);
+    // Persist the completed analysis so the review survives a page refresh.
+    // Cleared on ReviewScreen unmount (Done button, NavBar tap, or any exit).
+    try { localStorage.setItem("riq_active_review", JSON.stringify(analysis)); } catch {}
     setRating(newRating);
     setRatingHistory((h) => [...h, newRating]);
     setSessions((s) => [...s, analysis]);
