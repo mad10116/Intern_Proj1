@@ -3978,7 +3978,15 @@ export default function App() {
     const list = dailyPuzzles();
     const due = dueReviews(trainerRef.current);
     if (due.length) list[0] = genPuzzle(mulberry32(Date.now()), due[0], levelFor(trainerRef.current, due[0]));
-    setPuzzleRun({ mode: "daily", list, idx: 0, results: {} });
+    // Resume from where the user left off if they exited mid-drill today.
+    const _drillToday = new Date().toISOString().slice(0, 10);
+    const savedCount = (() => { try { const n = parseInt(localStorage.getItem("riq_drill_count_" + _drillToday), 10); return Number.isFinite(n) && n > 0 && n < list.length ? n : 0; } catch { return 0; } })();
+    // Pre-fill skipped slots with null so the results.length completion check
+    // (Object.keys(results).length >= list.length) still fires correctly after
+    // the user finishes the remaining puzzles in this resumed session.
+    const prefilledResults = {};
+    for (let i = 0; i < savedCount; i++) prefilledResults[i] = null;
+    setPuzzleRun({ mode: "daily", list, idx: savedCount, results: prefilledResults });
     setScreen("puzzle");
   }} />;
   else if (screen === "lobby") body = <Lobby onStart={startSession} onPrivate={() => setScreen("mpsetup")} go={go} rating={rating} progress={progress} />;
@@ -4014,6 +4022,11 @@ export default function App() {
         }
         return { ...r, results: { ...r.results, [idx]: ok }, justCompleted };
       });
+      // Persist partial daily drill progress after every answer so Exit and
+      // refresh don't reset the user back to puzzle 1.
+      if (puzzleRun && puzzleRun.mode === "daily") {
+        try { localStorage.setItem("riq_drill_count_" + new Date().toISOString().slice(0, 10), String(idx + 1)); } catch {}
+      }
     }}
     onNext={() => setPuzzleRun((r) => {
       if (r.mode === "daily" || r.mode === "firstrun") {
@@ -4036,7 +4049,10 @@ export default function App() {
         const perfect = r.list.every((_, i) => r.results[i]);
         // Stamp today's date so drill credit survives a refresh even before the
         // 10-hand session is done (streak_day is only written once both are complete).
-        try { localStorage.setItem("riq_daily_drill_" + new Date().toISOString().slice(0, 10), "true"); } catch {}
+        const _completedToday = new Date().toISOString().slice(0, 10);
+        try { localStorage.setItem("riq_daily_drill_" + _completedToday, "true"); } catch {}
+        // Drill is fully done — remove the partial-progress counter.
+        try { localStorage.removeItem("riq_drill_count_" + _completedToday); } catch {}
         setDaily((d) => ({ ...d, drill: true, repair: d.repair || perfect }));
       }
       if (finishedDrill) {
@@ -4064,7 +4080,12 @@ export default function App() {
     const list = dailyPuzzles();
     const due = dueReviews(trainerRef.current);
     if (due.length) list[0] = genPuzzle(mulberry32(Date.now()), due[0], levelFor(trainerRef.current, due[0]));
-    setPuzzleRun({ mode: "daily", list, idx: 0, results: {} });
+    // Resume from where the user left off if they exited mid-drill today.
+    const _drillToday = new Date().toISOString().slice(0, 10);
+    const savedCount = (() => { try { const n = parseInt(localStorage.getItem("riq_drill_count_" + _drillToday), 10); return Number.isFinite(n) && n > 0 && n < list.length ? n : 0; } catch { return 0; } })();
+    const prefilledResults = {};
+    for (let i = 0; i < savedCount; i++) prefilledResults[i] = null;
+    setPuzzleRun({ mode: "daily", list, idx: savedCount, results: prefilledResults });
     setScreen("puzzle");
   }} />;
 
