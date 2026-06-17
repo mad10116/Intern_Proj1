@@ -2,6 +2,8 @@
 // Single-file React build: full 6-max NLHE engine, AI opponents, equity engine,
 // session review with leak detection, learn modules, profile, RiverIQ rating.
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { Capacitor } from "@capacitor/core";
+import { App as CapApp } from "@capacitor/app";
 
 /* ============================ THEME ============================ */
 const T = {
@@ -322,7 +324,10 @@ function saveSession(s) {
 try { const stored = localStorage.getItem("riq_session"); if (stored) Auth.session = JSON.parse(stored); } catch {}
 const OAUTH_PROVIDERS = ["google"]; // add "apple" here once the Apple provider is configured in Supabase
 function oauthUrl(provider) {
-  return SUPABASE_URL + "/auth/v1/authorize?provider=" + provider + "&redirect_to=" + encodeURIComponent(window.location.origin);
+  const redirectTo = Capacitor.isNativePlatform()
+    ? "com.riveriq.app://login-callback"
+    : window.location.origin;
+  return SUPABASE_URL + "/auth/v1/authorize?provider=" + provider + "&redirect_to=" + encodeURIComponent(redirectTo);
 }
 async function sbFetch(path, opts = {}, retry = true) {
   const res = await fetch(SUPABASE_URL + path, {
@@ -2973,7 +2978,7 @@ function TendencyStat({ label, value, raw, lo, hi, lowText, highText, okText }) 
     </div>
   );
 }
-function ProfileScreen({ user, rating, ratingHistory, sessions, progress, answers, lifetime, onSignOut, tendencies, cosmetics, onCosmetic, trainer }) {
+function ProfileScreen({ user, rating, ratingHistory, sessions, progress, answers, lifetime, onSignOut, onDeleteAccount, tendencies, cosmetics, onCosmetic, trainer }) {
   const allStats = sessions.length ? sessions[sessions.length - 1].stats : null;
   const agg = { hands: lifetime.hands, net: lifetime.net };
   const modsDone = Object.keys(progress).length;
@@ -3119,6 +3124,12 @@ function ProfileScreen({ user, rating, ratingHistory, sessions, progress, answer
         ))}
       </div>
       <Btn kind="danger" onClick={onSignOut} style={{ width: "100%", marginTop: 16 }}>Sign out</Btn>
+      <div style={{ marginTop: 32, paddingTop: 20, borderTop: "1px solid rgba(194,69,62,.18)" }}>
+        <div style={{ fontSize: 11, color: T.faint, textAlign: "center", marginBottom: 10, lineHeight: 1.5 }}>
+          Deletes your account, rating, sessions, and all gameplay data permanently.
+        </div>
+        <Btn kind="danger" onClick={onDeleteAccount} style={{ width: "100%", background: "rgba(194,69,62,.08)", border: "1px solid rgba(194,69,62,.35)", fontSize: 13 }}>Delete account</Btn>
+      </div>
     </div>
   );
 }
@@ -3624,6 +3635,7 @@ function FeedbackWidget({ screen, profile, rating }) {
                     <button key={c} onClick={() => setCat(c)} style={{ flex: 1, padding: "8px", borderRadius: 10, border: "1px solid " + (cat === c ? T.brass : T.line), background: cat === c ? "rgba(201,165,70,.12)" : "transparent", color: cat === c ? T.brass : T.mist, fontSize: 13, fontWeight: 600 }}>{c}</button>
                   ))}
                 </div>
+                <div style={{ fontSize: 10.5, color: T.faint, marginBottom: 7, lineHeight: 1.5 }}>Please do not include personal information (like your full name or email) in your message.</div>
                 <textarea value={msg} onChange={(e) => setMsg(e.target.value)} rows={3} placeholder={cat === "Bug" ? "What broke, and what were you doing?" : cat === "Idea" ? "What would make this better?" : "What didn't make sense?"} style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: "1px solid " + T.line, background: T.baize2, color: T.card, fontSize: 14, fontFamily: "inherit", resize: "none" }} />
                 <div style={{ fontSize: 10.5, color: T.faint, margin: "6px 0 10px" }}>Sent with your username and current screen ({screen}) so it's easy to act on.</div>
                 {state === "error" && <div style={{ color: T.bad, fontSize: 12.5, marginBottom: 8 }}>Couldn't send, run upgrade6.sql in Supabase if this keeps happening.</div>}
@@ -3690,6 +3702,42 @@ export default function App() {
   useEffect(() => { dbSessionRef.current = dbSessionId; }, [dbSessionId]);
   const recordedRef = useRef(new Set());
   const equityRef = useRef(0.5);
+
+  // Native deep-link handler: receives OAuth tokens and invite codes on Android/iOS.
+  // On web the hash / search params are parsed directly in AuthScreen's useEffect.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const handleUrl = async ({ url }) => {
+      try {
+        // OAuth callback: com.riveriq.app://login-callback#access_token=...
+        const hashIdx = url.indexOf("#");
+        if (hashIdx !== -1 && url.includes("access_token")) {
+          const params = new URLSearchParams(url.slice(hashIdx + 1));
+          const at = params.get("access_token"), rt = params.get("refresh_token");
+          if (at) {
+            const ur = await fetch(SUPABASE_URL + "/auth/v1/user", { headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + at } });
+            if (ur.ok) {
+              const u = await ur.json();
+              saveSession({ access_token: at, refresh_token: rt, user: u });
+              const uname = (u.user_metadata && (u.user_metadata.full_name || u.user_metadata.name)) || (u.email || "player").split("@")[0];
+              const prof = await ensureProfile(uname.replace(/\s+/g, ""));
+              handleAuthed(prof, {});
+            }
+          }
+          return;
+        }
+        // Invite-link: com.riveriq.app://join?join=ABCD
+        const searchIdx = url.indexOf("?");
+        if (searchIdx !== -1) {
+          const params = new URLSearchParams(url.slice(searchIdx + 1));
+          const code = params.get("join");
+          if (code) { setPendingJoin(code.toUpperCase()); }
+        }
+      } catch (e) { console.error("[appUrlOpen]", e); }
+    };
+    CapApp.addListener("appUrlOpen", handleUrl);
+    return () => { CapApp.removeAllListeners(); };
+  }, []); // eslint-disable-line
 
   const handleAuthed = useCallback(async (prof, ans) => {
     setProfile(prof);
@@ -4088,6 +4136,27 @@ export default function App() {
     setLifetime({ hands: 0, won: 0, total: 0, net: 0 });
     setScreen("home");
   };
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm(
+      "Delete your account permanently?\n\nThis will erase your rating, all sessions, decisions, and progress. This cannot be undone."
+    );
+    if (!confirmed) return;
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-user-account`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${Auth.session?.access_token}`, apikey: SUPABASE_KEY },
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+      signOut();
+      try {
+        Object.keys(localStorage).filter(k => k.startsWith("riq_")).forEach(k => localStorage.removeItem(k));
+        Auth.session = null;
+      } catch {}
+    } catch (err) {
+      console.error("[deleteAccount]", err);
+      window.alert("Account deletion failed. Please email support@riveriq.com and we will delete your data within 30 days.");
+    }
+  };
   const lastSession = sessions[sessions.length - 1];
 
   const go = (id) => {
@@ -4209,7 +4278,7 @@ export default function App() {
   else if (screen === "mpsetup") body = <MpSetup back={() => setScreen("lobby")} onSeated={(t, seat) => { setMpTable(t); setMpSeat(seat); setScreen("mptable"); }} />;
   else if (screen === "mptable" && mpTable) body = <MpTableScreen table={mpTable} mySeat={mpSeat} profile={profile || { id: null }} onLeft={(handsPlayed) => { if (handsPlayed > 0) { setMpReviewId(mpTable.id); setScreen("mpreview"); } else setScreen("lobby"); setMpTable(null); }} />;
   else if (screen === "mpreview" && mpReviewId) body = <MpReviewScreen tableId={mpReviewId} go={go} />;
-  else if (screen === "profile") body = <ProfileScreen user={user} rating={rating} ratingHistory={ratingHistory} sessions={sessions} progress={progress} answers={answers} lifetime={lifetime} onSignOut={signOut} tendencies={tendencies} cosmetics={profile ? profile.cosmetics : {}} trainer={trainerState} onCosmetic={(k, v) => {
+  else if (screen === "profile") body = <ProfileScreen user={user} rating={rating} ratingHistory={ratingHistory} sessions={sessions} progress={progress} answers={answers} lifetime={lifetime} onSignOut={signOut} onDeleteAccount={handleDeleteAccount} tendencies={tendencies} cosmetics={profile ? profile.cosmetics : {}} trainer={trainerState} onCosmetic={(k, v) => {
     const cos = { ...((profile && profile.cosmetics) || {}), [k]: v };
     COSMETICS[k === "back" ? "back" : "felt"] = v || (k === "back" ? "classic" : null);
     setProfile((p) => ({ ...p, cosmetics: cos }));
