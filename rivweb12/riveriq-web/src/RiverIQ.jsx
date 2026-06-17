@@ -1214,7 +1214,7 @@ function SectionTitle({ children, right }) {
     </div>
   );
 }
-function RangeGrid({ pos = "BTN", compact }) {
+function RangeGrid({ pos = "BTN", compact, heroCode }) {
   // 13x13 starting-hand matrix, the chart every poker player reads instantly.
   // Pairs on the diagonal, suited upper-right, offsuit lower-left.
   const order = "AKQJT98765432".split("");
@@ -1250,6 +1250,10 @@ function RangeGrid({ pos = "BTN", compact }) {
               background: on ? (isPair ? T.brass : "rgba(201,165,70,.32)") : "rgba(255,255,255,.025)",
               color: on ? (isPair ? "#1B1505" : T.card) : T.faint,
               fontWeight: isPair ? 700 : 400,
+              outline: heroCode && code === heroCode ? `2px solid ${T.good}` : "none",
+              outlineOffset: "1px",
+              zIndex: heroCode && code === heroCode ? 1 : "auto",
+              position: "relative",
             }}>{compact ? "" : code.replace(/[so]$/, "")}</div>
           );
         }))}
@@ -2013,7 +2017,9 @@ function PuzzleScreen({ run, onResult, onNext, onExit, justCompleted }) {
   const [answered, setAnswered] = useState(null); // {action, grade, sizingNote}
   const [stageGrades, setStageGrades] = useState([]);
   const [betAmt, setBetAmt] = useState(0);
-  useEffect(() => { setStageIdx(0); setAnswered(null); setStageGrades([]); }, [run.idx]);
+  const [showWhy, setShowWhy] = useState(false);
+  const [showRange, setShowRange] = useState(false);
+  useEffect(() => { setStageIdx(0); setAnswered(null); setStageGrades([]); setShowWhy(false); setShowRange(false); }, [run.idx]);
   const stage = stages[stageIdx];
   useEffect(() => {
     if (stage) setBetAmt(Math.round((potTotal(stage.game) * 0.66) / SB) * SB || BB * 3);
@@ -2060,7 +2066,8 @@ function PuzzleScreen({ run, onResult, onNext, onExit, justCompleted }) {
           {stages.length > 1 ? ` · ${stageIdx + 1}/${stages.length}` : ""}
         </span>
       </div>
-      <div key={"tbl" + run.idx + "-" + stageIdx} style={{ position: "relative", flex: 1, minHeight: 300, margin: "4px 0" }}>
+      {/* Table: compressed to fixed height when feedback is showing so cards stay visible */}
+      <div key={"tbl" + run.idx + "-" + stageIdx} style={{ position: "relative", flex: answered ? "0 0 auto" : 1, height: answered ? 195 : undefined, minHeight: answered ? 195 : 300, margin: "4px 0" }}>
         <div style={{ position: "absolute", inset: "7% 4%", borderRadius: "50%", background: `radial-gradient(ellipse at 50% 38%, ${T.baize2}, ${T.baize} 75%)`, border: `7px solid #2A2017`, boxShadow: `inset 0 0 40px rgba(0,0,0,.55), 0 0 0 2px ${T.brassDim}` }} />
         <div style={{ position: "absolute", left: "50%", top: "44%", transform: "translate(-50%,-50%)", textAlign: "center", zIndex: 4 }}>
           <div style={{ display: "flex", gap: 5, justifyContent: "center" }}>
@@ -2071,54 +2078,113 @@ function PuzzleScreen({ run, onResult, onNext, onExit, justCompleted }) {
           </div>
         </div>
         {g.players.map((p, i) => <Seat key={i} p={p} idx={i} game={g} isHero={i === 0} intro={stageIdx === 0} />)}
-        {answered && (
-          <div className="fadeup" style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", background: "rgba(7,16,11,.97)", border: `1.5px solid ${answered.grade === "correct" ? T.good : answered.grade === "ok" ? T.brass : T.bad}`, borderRadius: 16, padding: "16px 18px", zIndex: 20, width: "90%", maxWidth: 340, maxHeight: "94%", overflowY: "auto", boxShadow: "0 10px 40px rgba(0,0,0,.6)" }}>
-            <div className="serif" style={{ fontSize: 20, color: answered.grade === "correct" ? T.good : answered.grade === "ok" ? T.brass : T.bad }}>
-              {answered.grade === "correct" ? "Correct." : answered.grade === "ok" ? "Works, note the detail." : "Not this time."}
-            </div>
-            <div style={{ fontSize: 12.5, color: T.mist, marginTop: 4 }}>Best play: <b style={{ color: T.card }}>{stage.correct[0] === "raise" ? (stage.allinLabel ? "all-in" : g.currentBet > 0 ? "raise" : "bet") : stage.correct[0]}</b></div>
-            <div style={{ fontSize: 13, color: "#D8E2DA", marginTop: 8, lineHeight: 1.55 }}>{answered.sizingNote || stage.why}</div>
-            {answered.sizingNote && <div style={{ fontSize: 12, color: T.mist, marginTop: 6, lineHeight: 1.5 }}>{stage.why}</div>}
-            {stage.eq != null && (
-              <div style={{ marginTop: 10 }}>
-                <div style={{ height: 5, borderRadius: 3, background: "#0A1812" }}>
-                  <div style={{ height: "100%", width: Math.round(stage.eq * 100) + "%", borderRadius: 3, background: stage.eq > 0.6 ? T.good : stage.eq > 0.35 ? T.brass : T.cordovan }} />
+      </div>
+      {answered ? (
+        /* ── Bottom-sheet feedback: table stays visible above, cards never covered ── */
+        (() => {
+          const vColor = answered.grade === "correct" ? T.good : answered.grade === "ok" ? T.brass : T.bad;
+          const heroCode = hero.cards && hero.cards.length === 2 ? handCode(hero.cards[0], hero.cards[1]) : null;
+          const reqEq = toCall > 0 ? toCall / (pot + toCall) : null;
+          return (
+            <div className="fadeup" style={{ flex: 1, overflowY: "auto", background: "#0E2218", borderTop: `3px solid ${vColor}`, borderRadius: "16px 16px 0 0", padding: "14px 16px", paddingBottom: "calc(14px + env(safe-area-inset-bottom))" }}>
+              {/* Header row: verdict + best-play chip */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span className="serif" style={{ fontSize: 19, color: vColor }}>
+                  {answered.grade === "correct" ? "Correct." : answered.grade === "ok" ? "Works, note the detail." : "Not this time."}
+                </span>
+                <span style={{ fontSize: 11.5, background: "rgba(255,255,255,.06)", border: "1px solid " + T.line, borderRadius: 99, padding: "3px 10px", color: T.card, whiteSpace: "nowrap" }}>
+                  Best: <b style={{ color: T.card }}>{stage.correct[0] === "raise" ? (stage.allinLabel ? "all-in" : g.currentBet > 0 ? "raise" : "bet") : stage.correct[0]}</b>
+                </span>
+              </div>
+              {/* Why? collapsible prose */}
+              <button onClick={() => setShowWhy((v) => !v)} style={{ width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: "1px solid " + T.line, color: T.brass, fontSize: 12, padding: "5px 0 8px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <span>Why?</span><span style={{ fontSize: 9 }}>{showWhy ? "▲" : "▼"}</span>
+              </button>
+              {showWhy && (
+                <div style={{ fontSize: 13, color: "#D8E2DA", lineHeight: 1.6, marginBottom: 10 }}>
+                  {answered.sizingNote && <div style={{ marginBottom: 5 }}>{answered.sizingNote}</div>}
+                  {stage.why}
                 </div>
-                <div className="mono" style={{ fontSize: 10.5, color: T.faint, marginTop: 3 }}>your hand wins ~{Math.round(stage.eq * 100)} in 100</div>
+              )}
+              {/* Dual-track equity bars */}
+              {stage.eq != null && (
+                <div style={{ background: "rgba(6,13,9,.7)", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+                  {reqEq != null && (
+                    <>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 3 }}>
+                        <span style={{ fontSize: 10, color: T.faint, textTransform: "uppercase", letterSpacing: ".08em" }}>Required equity</span>
+                        <span className="mono" style={{ fontSize: 11, color: T.cordovan }}>{Math.round(reqEq * 100)}%</span>
+                      </div>
+                      <div style={{ height: 7, borderRadius: 4, background: T.baize, marginBottom: 9, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: Math.round(reqEq * 100) + "%", borderRadius: 4, background: T.cordovan + "BB" }} />
+                      </div>
+                    </>
+                  )}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 3 }}>
+                    <span style={{ fontSize: 10, color: T.faint, textTransform: "uppercase", letterSpacing: ".08em" }}>Your equity</span>
+                    <span className="mono" style={{ fontSize: 11, color: stage.eq > 0.6 ? T.good : stage.eq > 0.35 ? T.brass : T.bad }}>{Math.round(stage.eq * 100)}%</span>
+                  </div>
+                  <div style={{ height: 7, borderRadius: 4, background: T.baize, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: Math.round(stage.eq * 100) + "%", borderRadius: 4, background: stage.eq > 0.6 ? T.good : stage.eq > 0.35 ? T.brass : T.cordovan }} />
+                  </div>
+                  {reqEq != null && (
+                    <div style={{ fontSize: 10.5, textAlign: "center", marginTop: 6, color: stage.eq >= reqEq ? T.good : T.bad }}>
+                      {stage.eq >= reqEq
+                        ? `+${Math.round((stage.eq - reqEq) * 100)} pts above breakeven — profitable`
+                        : `${Math.round((reqEq - stage.eq) * 100)} pts short of breakeven — losing call`}
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* Strategy range accordion — preflop spots only */}
+              {g.street === "preflop" && OPEN_RANGE[g.heroPos] && (
+                <div style={{ marginBottom: 12 }}>
+                  <button onClick={() => setShowRange((v) => !v)} style={{ width: "100%", textAlign: "left", background: "none", border: `1px solid ${T.line}`, borderRadius: 9, padding: "8px 12px", color: T.mist, fontSize: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>View Strategy Range</span><span style={{ fontSize: 9 }}>{showRange ? "▲" : "▼"}</span>
+                  </button>
+                  {showRange && (
+                    <div style={{ marginTop: 8, padding: "12px 10px", background: "#0A1A13", borderRadius: 12, border: "1px solid " + T.line }}>
+                      <RangeGrid pos={g.heroPos} compact heroCode={heroCode} />
+                    </div>
+                  )}
+                </div>
+              )}
+              {isLastStage && stages.length > 1 && (
+                <div style={{ fontSize: 12, color: T.brass, marginBottom: 8 }}>Hand complete: {rightCount}/{stages.length} decisions right.</div>
+              )}
+              {isLastStage && justCompleted && (
+                <div style={{ fontSize: 12.5, color: T.good, marginBottom: 8, fontWeight: 700 }}>✓ Module complete, nice work.</div>
+              )}
+              <Btn kind="primary" onClick={!isLastStage ? continueStage : finishRun ? onExit : onNext} style={{ width: "100%", marginTop: 4 }}>
+                {!isLastStage ? "Continue the hand →" : run.mode === "firstrun" ? (run.idx >= run.list.length - 1 ? "Take your seat" : "Next") : run.mode === "daily" ? (run.idx >= run.list.length - 1 ? "Finish drill" : "Next puzzle") : "Next puzzle"}
+              </Btn>
+            </div>
+          );
+        })()
+      ) : (
+        <>
+          <div key={"pr" + run.idx + "-" + stageIdx} style={{ background: T.baize2, border: "1px solid " + T.line, borderLeft: `4px solid ${T.brass}`, borderRadius: 12, padding: "10px 14px", marginBottom: 8, animation: stageIdx === 0 ? "riqFadeUp .4s ease 1.9s both" : "riqFadeUp .4s ease .3s both" }}>
+            <div style={{ fontSize: 13.5, color: T.card, lineHeight: 1.45 }}>{stage.prompt}</div>
+          </div>
+          <div style={{ padding: "4px 0 calc(14px + env(safe-area-inset-bottom))" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+              <Btn kind="ghost" disabled={!!answered} onClick={() => answer("fold")} style={{ flex: "0 0 auto", padding: "12px 16px", color: T.faint, fontWeight: 500, fontSize: 14 }}>Fold</Btn>
+              <Btn kind="felt" disabled={!!answered} onClick={() => answer(toCall > 0 ? "call" : "check")} style={{ flex: 1 }}>
+                {toCall > 0 ? <>Call <span className="mono">{toCall.toLocaleString()}</span></> : "Check"}
+              </Btn>
+              <Btn kind="primary" disabled={!!answered} onClick={() => answer("raise", stage.sizing ? betAmt : undefined)} style={{ flex: 1.7, fontSize: 16 }}>
+                {stage.allinLabel ? "All-in" : g.currentBet > 0 ? "Raise" : stage.sizing ? <>Bet <span className="mono">{betAmt.toLocaleString()}</span></> : "Bet"}
+              </Btn>
+            </div>
+            {stage.sizing && !answered && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+                <input type="range" min={Math.round(pot * 0.2 / SB) * SB} max={Math.round(pot * 1.5 / SB) * SB} step={SB} value={betAmt} onChange={(e) => setBetAmt(+e.target.value)} aria-label="Bet size" />
+                <span className="mono" style={{ fontSize: 11, color: T.mist, minWidth: 58, textAlign: "right" }}>{Math.round((betAmt / pot) * 100)}% pot</span>
               </div>
             )}
-            {isLastStage && stages.length > 1 && (
-              <div style={{ fontSize: 12, color: T.brass, marginTop: 8 }}>Hand complete: {rightCount}/{stages.length} decisions right.</div>
-            )}
-            {isLastStage && justCompleted && (
-              <div style={{ fontSize: 12.5, color: T.good, marginTop: 8, fontWeight: 700 }}>✓ Module complete, nice work.</div>
-            )}
-            <Btn kind="primary" onClick={!isLastStage ? continueStage : finishRun ? onExit : onNext} style={{ width: "100%", marginTop: 12 }}>
-              {!isLastStage ? "Continue the hand →" : run.mode === "firstrun" ? (run.idx >= run.list.length - 1 ? "Take your seat" : "Next") : run.mode === "daily" ? (run.idx >= run.list.length - 1 ? "Finish drill" : "Next puzzle") : "Next puzzle"}
-            </Btn>
           </div>
-        )}
-      </div>
-      <div key={"pr" + run.idx + "-" + stageIdx} style={{ background: T.baize2, border: "1px solid " + T.line, borderLeft: `4px solid ${T.brass}`, borderRadius: 12, padding: "10px 14px", marginBottom: 8, animation: stageIdx === 0 ? "riqFadeUp .4s ease 1.9s both" : "riqFadeUp .4s ease .3s both" }}>
-        <div style={{ fontSize: 13.5, color: T.card, lineHeight: 1.45 }}>{stage.prompt}</div>
-      </div>
-      <div style={{ padding: "4px 0 calc(14px + env(safe-area-inset-bottom))" }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
-          <Btn kind="ghost" disabled={!!answered} onClick={() => answer("fold")} style={{ flex: "0 0 auto", padding: "12px 16px", color: T.faint, fontWeight: 500, fontSize: 14 }}>Fold</Btn>
-          <Btn kind="felt" disabled={!!answered} onClick={() => answer(toCall > 0 ? "call" : "check")} style={{ flex: 1 }}>
-            {toCall > 0 ? <>Call <span className="mono">{toCall.toLocaleString()}</span></> : "Check"}
-          </Btn>
-          <Btn kind="primary" disabled={!!answered} onClick={() => answer("raise", stage.sizing ? betAmt : undefined)} style={{ flex: 1.7, fontSize: 16 }}>
-            {stage.allinLabel ? "All-in" : g.currentBet > 0 ? "Raise" : stage.sizing ? <>Bet <span className="mono">{betAmt.toLocaleString()}</span></> : "Bet"}
-          </Btn>
-        </div>
-        {stage.sizing && !answered && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
-            <input type="range" min={Math.round(pot * 0.2 / SB) * SB} max={Math.round(pot * 1.5 / SB) * SB} step={SB} value={betAmt} onChange={(e) => setBetAmt(+e.target.value)} aria-label="Bet size" />
-            <span className="mono" style={{ fontSize: 11, color: T.mist, minWidth: 58, textAlign: "right" }}>{Math.round((betAmt / pot) * 100)}% pot</span>
-          </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }
@@ -2358,7 +2424,7 @@ function AuthScreen({ onAuthed, pendingJoin }) {
     </div>
   );
 }
-function HomeScreen({ user, sessions, lifetime, rating, go, streak, daily, onDailyDrill, trainerState, ratingHistory, onOpenHands }) {
+function HomeScreen({ user, sessions, lifetime, rating, go, streak, daily, onDailyDrill, trainerState, ratingHistory, onOpenHands, sessionHandCount = 0 }) {
   const last = sessions[sessions.length - 1];
   const lastDelta = last ? last.ratingDelta : null;
   const hr = new Date().getHours();
@@ -2366,6 +2432,10 @@ function HomeScreen({ user, sessions, lifetime, rating, go, streak, daily, onDai
   const bankedToday = daily.drill && daily.session;
   const reviewDue = trainerState && dueReviews(trainerState).length > 0;
   const wkProgress = weekProgress(sessions);
+  const today = new Date().toISOString().slice(0, 10);
+  const drillCount = daily.drill ? 10 : (() => { try { const n = parseInt(localStorage.getItem("riq_drill_count_" + today), 10); return Number.isFinite(n) ? Math.min(n, 10) : 0; } catch { return 0; } })();
+  const sessCount = daily.session ? 10 : Math.min(sessionHandCount, 10);
+  const [scenarioFamily, setScenarioFamily] = useState(null);
 
   return (
     <div style={{ padding: "26px 20px 96px", overflowY: "auto", height: "100%" }}>
@@ -2408,15 +2478,32 @@ function HomeScreen({ user, sessions, lifetime, rating, go, streak, daily, onDai
       </Btn>
 
       <SectionTitle right={streak > 0 ? <span className="mono" style={{ fontSize: 13, color: T.cordovan }}>{streak} day{streak === 1 ? "" : "s"}</span> : null}>Daily</SectionTitle>
+      <div style={{ display: "flex", gap: 7, marginBottom: 10 }}>
+        {[["pre", "Preflop Opens"], ["price", "River Calls"], ["value", "Value Sizing"]].map(([fam, label]) => {
+          const sel = scenarioFamily === fam;
+          return (
+            <button key={fam} onClick={() => setScenarioFamily(sel ? null : fam)} style={{ flex: 1, padding: "7px 4px", borderRadius: 20, border: sel ? `1px solid ${T.brass}` : `1px solid ${T.brass}26`, background: sel ? "rgba(201,165,70,.18)" : "rgba(201,165,70,.05)", color: sel ? T.brass : T.mist, fontSize: 11.5, fontWeight: sel ? 700 : 500, transition: "all .18s ease" }}>{label}</button>
+          );
+        })}
+      </div>
       {/* daily card: the brass left-rail signals "this is the thing to do today" */}
-      <button onClick={onDailyDrill} style={{ width: "100%", textAlign: "left", background: bankedToday ? "rgba(201,165,70,.07)" : T.baize2, border: "1px solid " + T.line, borderLeft: `3px solid ${bankedToday ? T.good : T.brass}`, borderRadius: 12, padding: "16px 18px", color: T.card }}>
+      <button onClick={() => onDailyDrill(scenarioFamily)} style={{ width: "100%", textAlign: "left", background: bankedToday ? "rgba(201,165,70,.07)" : T.baize2, border: "1px solid " + T.line, borderLeft: `3px solid ${bankedToday ? T.good : T.brass}`, borderRadius: 12, padding: "16px 18px", color: T.card }}>
         <div className="mono" style={{ fontSize: 10, color: bankedToday ? T.good : T.brass, letterSpacing: ".12em", textTransform: "uppercase" }}>
           {bankedToday ? "Streak banked for today" : "Keep the streak alive"}
         </div>
         <div className="serif" style={{ fontSize: 21, marginTop: 5 }}>Today's ten puzzles</div>
-        <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
-          <span style={{ fontSize: 12.5, color: daily.drill ? T.good : T.mist }}>{daily.drill ? "✓" : "○"} Daily drill</span>
-          <span style={{ fontSize: 12.5, color: daily.session ? T.good : T.mist }}>{daily.session ? "✓" : "○"} A ten-hand session</span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+          {[["Daily drill", drillCount], ["Ten-hand session", sessCount]].map(([label, count]) => (
+            <div key={label}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 11, color: count >= 10 ? T.good : T.mist }}>{label}</span>
+                <span className="mono" style={{ fontSize: 11, color: count >= 10 ? T.good : T.brass }}>{count}/10</span>
+              </div>
+              <div style={{ height: 5, borderRadius: 3, background: "rgba(201,165,70,.12)", overflow: "hidden" }}>
+                <div style={{ width: `${(count / 10) * 100}%`, height: "100%", borderRadius: 3, background: count >= 10 ? T.good : T.brass, transition: "width .4s ease", animation: count >= 10 ? "riqPulse 1.6s ease-out 1" : "none" }} />
+              </div>
+            </div>
+          ))}
         </div>
         {(streak > 0 || reviewDue || (trainerState && trainerState.shields > 0)) && (
           <div style={{ fontSize: 11, color: T.faint, marginTop: 9, paddingTop: 9, borderTop: `1px solid ${T.line}` }}>
@@ -2723,8 +2810,8 @@ function LearnScreen({ progress, openModule, focusLeaks, onTrainer, ratingHistor
           {(focusLeaks || []).length ? "Endless puzzles aimed at your leaks: " + focusLeaks.slice(0, 2).map((l) => l.title.toLowerCase()).join(", ") : "Endless decision puzzles on a real table. Play the spot, take the verdict."}
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          {[["easy", "Easy"], ["medium", "Medium"], ["hard", "Hard"]].map(([lv, label]) => (
-            <button key={lv} onClick={() => onTrainer(lv)} style={{ flex: 1, padding: "9px", borderRadius: 10, border: "1px solid " + T.line, background: T.baize2, color: lv === "hard" ? T.cordovan : lv === "medium" ? T.brass : T.good, fontWeight: 700, fontSize: 13 }}>{label}</button>
+          {[["easy", "Easy", "#8FA89B"], ["medium", "Medium", "#C5A880"], ["hard", "Hard", "#B87D78"]].map(([lv, label, col]) => (
+            <button key={lv} onClick={() => onTrainer(lv)} style={{ flex: 1, padding: "9px", borderRadius: 10, border: `1px solid ${col}26`, background: `${col}26`, color: col, fontWeight: 600, fontSize: 13 }}>{label}</button>
           ))}
         </div>
         <div style={{ fontSize: 10.5, color: T.faint, marginTop: 8 }}>Medium adds crowded pots. Hard adds full multi-street hands and bet sizing.</div>
@@ -4025,12 +4112,13 @@ export default function App() {
 
   let body;
   if (!user) body = <AuthScreen onAuthed={handleAuthed} pendingJoin={pendingJoin} />;
-  else if (screen === "home") body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={(s) => (s === "lobby" ? setScreen("lobby") : go(s))} streak={streak} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} onDailyDrill={() => {
-    const list = dailyPuzzles();
+  else if (screen === "home") body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={(s) => (s === "lobby" ? setScreen("lobby") : go(s))} streak={streak} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} sessionHandCount={daily.session ? 10 : Math.min((lastSession ? lastSession.stats.hands : 0), 10)} onDailyDrill={(family) => {
+    const _drillToday = new Date().toISOString().slice(0, 10);
+    const _dateSeed = (() => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); })();
+    const list = family ? Array.from({ length: 10 }, (_, i) => genPuzzle(mulberry32(_dateSeed + i + 1337), family, 0.6)) : dailyPuzzles();
     const due = dueReviews(trainerRef.current);
     if (due.length) list[0] = genPuzzle(mulberry32(Date.now()), due[0], levelFor(trainerRef.current, due[0]));
     // Resume from where the user left off if they exited mid-drill today.
-    const _drillToday = new Date().toISOString().slice(0, 10);
     const savedCount = (() => { try { const n = parseInt(localStorage.getItem("riq_drill_count_" + _drillToday), 10); return Number.isFinite(n) && n > 0 && n < list.length ? n : 0; } catch { return 0; } })();
     // Pre-fill skipped slots with null so the results.length completion check
     // (Object.keys(results).length >= list.length) still fires correctly after
@@ -4127,12 +4215,13 @@ export default function App() {
     setProfile((p) => ({ ...p, cosmetics: cos }));
     if (profile) dbUpdate("users", `id=eq.${profile.id}`, { cosmetics: cos });
   }} />;
-  else body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={go} streak={streak} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} onDailyDrill={() => {
-    const list = dailyPuzzles();
+  else body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={go} streak={streak} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} sessionHandCount={daily.session ? 10 : Math.min((lastSession ? lastSession.stats.hands : 0), 10)} onDailyDrill={(family) => {
+    const _drillToday = new Date().toISOString().slice(0, 10);
+    const _dateSeed = (() => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); })();
+    const list = family ? Array.from({ length: 10 }, (_, i) => genPuzzle(mulberry32(_dateSeed + i + 1337), family, 0.6)) : dailyPuzzles();
     const due = dueReviews(trainerRef.current);
     if (due.length) list[0] = genPuzzle(mulberry32(Date.now()), due[0], levelFor(trainerRef.current, due[0]));
     // Resume from where the user left off if they exited mid-drill today.
-    const _drillToday = new Date().toISOString().slice(0, 10);
     const savedCount = (() => { try { const n = parseInt(localStorage.getItem("riq_drill_count_" + _drillToday), 10); return Number.isFinite(n) && n > 0 && n < list.length ? n : 0; } catch { return 0; } })();
     const prefilledResults = {};
     for (let i = 0; i < savedCount; i++) prefilledResults[i] = null;
