@@ -10,9 +10,6 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: rivweb12/riveriq-web
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -31,15 +28,19 @@ jobs:
           distribution: temurin
 
       - name: Install dependencies
+        working-directory: rivweb12/riveriq-web
         run: npm ci
 
       - name: Build web assets
+        working-directory: rivweb12/riveriq-web
         run: npm run build
 
       - name: Sync Capacitor Android
+        working-directory: rivweb12/riveriq-web
         run: npx cap sync android
 
       - name: Fix gradlew permissions (Windows dev → Linux runner)
+        working-directory: rivweb12/riveriq-web
         run: chmod +x android/gradlew
 
       - name: Build release APK
@@ -55,9 +56,6 @@ jobs:
 
   build-ios:
     runs-on: macos-latest
-    defaults:
-      run:
-        working-directory: rivweb12/riveriq-web
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -70,15 +68,19 @@ jobs:
           cache-dependency-path: rivweb12/riveriq-web/package-lock.json
 
       - name: Install dependencies
+        working-directory: rivweb12/riveriq-web
         run: npm ci
 
       - name: Build web assets
+        working-directory: rivweb12/riveriq-web
         run: npm run build
 
       - name: Sync Capacitor iOS
+        working-directory: rivweb12/riveriq-web
         run: npx cap sync ios
 
       - name: Build iOS (unsigned)
+        working-directory: rivweb12/riveriq-web
         run: |
           xcodebuild \
             -workspace ios/App/App.xcworkspace \
