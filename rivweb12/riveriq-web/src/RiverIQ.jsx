@@ -4,6 +4,12 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Capacitor } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
+import { Haptics, ImpactStyle } from "@capacitor/haptics";
+
+function haptic(style) {
+  if (!Capacitor.isNativePlatform()) return;
+  try { Haptics.impact({ style: style === "heavy" ? ImpactStyle.Heavy : style === "medium" ? ImpactStyle.Medium : ImpactStyle.Light }); } catch {}
+}
 
 /* ============================ THEME ============================ */
 const T = {
@@ -466,6 +472,7 @@ function endStreet(g) {
   const canAct = g.players.filter((p) => !p.folded && !p.allIn);
   if (g.street === "river") return showdown(g);
   if (canAct.length <= 1) {
+    g.allInRevealFrom = g.board.length;
     while (g.board.length < 5) g.board.push(g.deck.pop());
     g.street = "river";
     return showdown(g);
@@ -1400,6 +1407,18 @@ function PlayScreen({ game, setGame, equity, onHeroAct, onNextHand, onEndSession
   useEffect(() => { setRaiseTo(Math.min(Math.max(minRaiseTo, game.currentBet * 2 || BB * 3), maxRaiseTo)); }, [game.handNo, game.street, game.currentBet]); // eslint-disable-line
   const pot = potTotal(game);
   const result = game.street === "result";
+  const [revealedBoardCount, setRevealedBoardCount] = useState(null);
+  useEffect(() => {
+    if (game.street === "result" && game.wentToShowdown && game.allInRevealFrom != null && game.allInRevealFrom < game.board.length) {
+      setRevealedBoardCount(game.allInRevealFrom);
+      const timers = [];
+      for (let i = game.allInRevealFrom; i < game.board.length; i++) {
+        timers.push(setTimeout(() => setRevealedBoardCount(i + 1), (i - game.allInRevealFrom + 1) * 850));
+      }
+      return () => timers.forEach(clearTimeout);
+    }
+    setRevealedBoardCount(null);
+  }, [game.handNo, game.street]); // eslint-disable-line
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "12px 12px 0" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -1418,9 +1437,14 @@ function PlayScreen({ game, setGame, equity, onHeroAct, onNextHand, onEndSession
         {/* community cards + pot */}
         <div style={{ position: "absolute", left: "50%", top: "44%", transform: "translate(-50%,-50%)", textAlign: "center", zIndex: 4 }}>
           <div style={{ display: "flex", gap: 5, justifyContent: "center" }}>
-            {[0, 1, 2, 3, 4].map((i) => game.board[i]
-              ? <PlayingCard key={i} card={game.board[i]} w={40} deal />
-              : <div key={i} style={{ width: 40, height: 57, borderRadius: 6, border: "1.5px dashed rgba(201,165,70,.25)" }} />)}
+            {[0, 1, 2, 3, 4].map((i) => {
+              const revealed = revealedBoardCount === null || i < revealedBoardCount;
+              return game.board[i] && revealed
+                ? <PlayingCard key={i} card={game.board[i]} w={40} deal />
+                : game.board[i]
+                  ? <div key={i} style={{ width: 40, height: 57, borderRadius: 6, background: "rgba(201,165,70,.08)", border: "1.5px solid rgba(201,165,70,.35)", animation: "riqPulse 0.8s ease-in-out infinite" }} />
+                  : <div key={i} style={{ width: 40, height: 57, borderRadius: 6, border: "1.5px dashed rgba(201,165,70,.25)" }} />;
+            })}
           </div>
           <div className="mono" style={{ marginTop: 8, fontSize: 14, color: T.brass, fontWeight: 600 }}>
             <span style={{ fontSize: 10, color: T.faint, letterSpacing: ".1em" }}>POT </span>{pot.toLocaleString()}
@@ -1430,6 +1454,16 @@ function PlayScreen({ game, setGame, equity, onHeroAct, onNextHand, onEndSession
         {/* result overlay */}
         {result && (
           <div className="fadeup" style={{ position: "absolute", left: "50%", top: "44%", transform: "translate(-50%,-50%)", background: "rgba(7,16,11,.95)", border: "1.5px solid " + T.brass, borderRadius: 16, padding: "16px 22px", textAlign: "center", zIndex: 20, minWidth: 230 }}>
+            {game.wentToShowdown && game.players.filter((p, i) => i !== 0 && !p.folded).length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+                {game.players.filter((p, i) => i !== 0 && !p.folded).map((p, pi) => (
+                  <div key={pi} style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "center" }}>
+                    <span style={{ fontSize: 10, color: T.mist, marginRight: 4 }}>{p.name}</span>
+                    {p.cards && p.cards.map((c, k) => <PlayingCard key={k} card={c} w={28} />)}
+                  </div>
+                ))}
+              </div>
+            )}
             {game.winners.map((w) => (
               <div key={w.idx} style={{ marginBottom: 6 }}>
                 <span className="serif" style={{ fontSize: 19, color: T.brass }}>{game.players[w.idx].name}</span>
@@ -1438,7 +1472,7 @@ function PlayScreen({ game, setGame, equity, onHeroAct, onNextHand, onEndSession
               </div>
             ))}
             {!game.wentToShowdown && <div style={{ fontSize: 11.5, color: T.faint }}>everyone folded</div>}
-            <Btn kind="primary" onClick={onNextHand} style={{ marginTop: 10, width: "100%" }}>Next hand</Btn>
+            <Btn kind="primary" onClick={() => { haptic("light"); onNextHand(); }} style={{ marginTop: 10, width: "100%" }}>Next hand</Btn>
           </div>
         )}
       </div>
@@ -2439,7 +2473,9 @@ function HomeScreen({ user, sessions, lifetime, rating, go, streak, daily, onDai
   const wkProgress = weekProgress(sessions);
   const today = new Date().toISOString().slice(0, 10);
   const drillCount = daily.drill ? 10 : (() => { try { const n = parseInt(localStorage.getItem("riq_drill_count_" + today), 10); return Number.isFinite(n) ? Math.min(n, 10) : 0; } catch { return 0; } })();
-  const sessCount = daily.session ? 10 : Math.min(sessionHandCount, 10);
+  const _today2 = new Date().toISOString().slice(0, 10);
+  const _storedDailyHands = (() => { try { return parseInt(localStorage.getItem("riq_session_hands_" + _today2) || "0", 10); } catch { return 0; } })();
+  const sessCount = daily.session ? 10 : Math.min(Math.max(sessionHandCount, _storedDailyHands), 10);
   const [scenarioFamily, setScenarioFamily] = useState(null);
 
   return (
@@ -2582,7 +2618,10 @@ function Lobby({ onStart, onPrivate, go, rating, progress }) {
 }
 
 /* ============================ REVIEW & REPLAY ============================ */
-function LeakCard({ l, i, openModule }) {
+function LeakCard({ l, i, openModule, allHands, openReplay }) {
+  const linkedHands = allHands
+    ? allHands.filter((h) => h.actions && h.actions.some((a) => a.idx === 0 && a.ruleId === l.ruleId && a.evLoss > 0)).slice(0, 3)
+    : [];
   return (
     <div style={{ background: "rgba(194,69,62,.06)", border: "1px solid rgba(194,69,62,.28)", borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
@@ -2600,6 +2639,13 @@ function LeakCard({ l, i, openModule }) {
         </span>
         <Btn kind="felt" onClick={() => openModule(l.module)} style={{ padding: "7px 13px", fontSize: 12.5 }}>Drill this →</Btn>
       </div>
+      {linkedHands.length > 0 && openReplay && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+          {linkedHands.map((h) => (
+            <button key={h.handNo} onClick={() => openReplay(h)} style={{ background: "none", border: "1px solid " + T.line, color: T.brass, borderRadius: 7, padding: "4px 9px", fontSize: 11 }}>Hand #{h.handNo + 1} →</button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -2650,7 +2696,7 @@ function ReviewScreen({ session, rating, band, go, openModule, openReplay, lifet
           A clean session, no real leaks found. Keep stacking hands and the picture sharpens.
         </div>
       )}
-      {session.leaks.slice(0, 3).map((l, i) => <LeakCard key={l.ruleId} l={l} i={i} openModule={openModule} />)}
+      {session.leaks.slice(0, 3).map((l, i) => <LeakCard key={l.ruleId} l={l} i={i} openModule={openModule} allHands={session.allHands} openReplay={openReplay} />)}
 
       {session.planCheck && (
         <>
@@ -3197,12 +3243,16 @@ function MpSeatBox({ p, slot, isMe, toAct, button, winners, showdown }) {
   const acting = toAct === p.seat;
   const won = winners && winners.some((w) => w.idx === p.seat);
   const showCards = (isMe || (showdown && p.cards)) && p.cards;
+  const showBacksAtShowdown = showdown && !p.cards && !p.folded && !isMe;
   return (
     <div style={{ position: "absolute", ...SEAT_POS[slot], transform: "translate(-50%,-50%)", textAlign: "center", opacity: p.folded ? 0.38 : 1, zIndex: 5 }}>
       <div style={{ display: "flex", gap: 3, justifyContent: "center", marginBottom: 4, minHeight: isMe ? 64 : 44 }}>
-        {[0, 1].map((i) => (
-          <PlayingCard key={i} card={showCards ? p.cards[i] : null} hidden={!showCards} w={isMe ? 44 : 30} />
-        ))}
+        {showBacksAtShowdown
+          ? [0, 1].map((i) => <PlayingCard key={i} card={null} hidden={true} w={isMe ? 44 : 30} />)
+          : [0, 1].map((i) => (
+            <PlayingCard key={i} card={showCards ? p.cards[i] : null} hidden={!showCards} w={isMe ? 44 : 30} />
+          ))
+        }
       </div>
       <div style={{ background: won ? "rgba(201,165,70,.18)" : "rgba(7,16,11,.88)", border: `1.5px solid ${acting || won ? T.brass : T.line}`, borderRadius: 10, padding: "4px 9px", minWidth: 76, animation: acting ? "riqPulse 1.4s infinite" : "none", position: "relative" }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: won ? T.brass : T.card }}>{p.name}{button === p.seat && <span style={{ color: T.brass }}> ⓓ</span>}</div>
@@ -3214,6 +3264,8 @@ function MpSeatBox({ p, slot, isMe, toAct, button, winners, showdown }) {
     </div>
   );
 }
+const MP_AFK_SECONDS = 90;
+const MP_AFK_KICK_STREAK = 2;
 function MpTableScreen({ table, mySeat, profile, onLeft }) {
   const [pub, setPub] = useState(null);
   const [lobby, setLobby] = useState(null);
@@ -3223,6 +3275,10 @@ function MpTableScreen({ table, mySeat, profile, onLeft }) {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const aliveRef = useRef(true);
+  const [nowTs, setNowTs] = useState(() => Date.now());
+  const afkStreakRef = useRef({});
+
+  useEffect(() => { const t = setInterval(() => setNowTs(Date.now()), 1000); return () => clearInterval(t); }, []);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -3238,7 +3294,7 @@ function MpTableScreen({ table, mySeat, profile, onLeft }) {
           if (aliveRef.current && mc.data) setMyCards(mc.data.cards);
         }
       } else if (data.lobby) setLobby(data.lobby);
-      timer = setTimeout(tick, 1300);
+      timer = setTimeout(tick, data.pub && data.pub.toAct === mySeat ? 600 : 1100);
     };
     tick();
     return () => { aliveRef.current = false; clearTimeout(timer); };
@@ -3254,9 +3310,24 @@ function MpTableScreen({ table, mySeat, profile, onLeft }) {
   const equity = useMemo(() => (myCards && pub && me && !me.folded ? equityMC(myCards, pub.board, Math.max(1, aliveOpp), 140) : 0),
     [myCards, pub && pub.street, pub && pub.board.length, aliveOpp]); // eslint-disable-line
 
+  const afkRemaining = pub && pub.toAct >= 0 && pub.toAct !== mySeat && pub.turnStarted
+    ? Math.max(0, MP_AFK_SECONDS - Math.floor((nowTs - pub.turnStarted) / 1000))
+    : MP_AFK_SECONDS;
+
+  useEffect(() => {
+    if (!pub || afkRemaining !== 0 || pub.toAct < 0 || pub.toAct === mySeat || pub.street === "result") return;
+    const afkSeat = pub.toAct;
+    const streak = (afkStreakRef.current[afkSeat] || 0) + 1;
+    afkStreakRef.current[afkSeat] = streak;
+    if (table.host === profile.id) tableCall("kick_check", table.id);
+  }, [afkRemaining]); // eslint-disable-line
+
+  useEffect(() => { if (pub) afkStreakRef.current = {}; }, [pub && pub.handNo]); // eslint-disable-line
+
   async function act(action) {
     if (busy) return;
     setBusy(true);
+    haptic(action.type === "raise" ? "medium" : "light");
     await tableCall("act", table.id, { action });
     const { data } = await tableCall("state", table.id);
     if (data.pub) setPub(data.pub);
@@ -3299,10 +3370,10 @@ function MpTableScreen({ table, mySeat, profile, onLeft }) {
   const result = pub.street === "result";
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "12px 12px 0" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <button onClick={leave} style={{ background: "none", border: "1px solid " + T.line, color: T.mist, borderRadius: 8, padding: "5px 10px", fontSize: 12 }}>Leave</button>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", marginBottom: 6 }}>
+        <button onClick={leave} style={{ background: "none", border: "1px solid " + T.line, color: T.mist, borderRadius: 8, padding: "5px 10px", fontSize: 12, justifySelf: "start" }}>Leave</button>
         <span className="mono" style={{ fontSize: 12, color: T.brass, letterSpacing: ".15em" }}>{table.table_code}</span>
-        <span className="mono" style={{ fontSize: 12, color: T.faint }}>#{pub.handNo + 1}</span>
+        <span className="mono" style={{ fontSize: 12, color: T.faint, justifySelf: "end" }}>#{pub.handNo + 1}</span>
       </div>
       <div style={{ position: "relative", flex: 1, minHeight: 330, margin: "4px 0" }}>
         <div style={{ position: "absolute", inset: "7% 4%", borderRadius: "50%", background: `radial-gradient(ellipse at 50% 38%, ${T.baize2}, ${T.baize} 75%)`, border: `7px solid #2A2017`, boxShadow: `inset 0 0 40px rgba(0,0,0,.55), 0 0 0 2px ${T.brassDim}` }} />
@@ -3328,7 +3399,7 @@ function MpTableScreen({ table, mySeat, profile, onLeft }) {
                 {w.cat && <div style={{ fontSize: 12, color: T.mist, marginTop: 2 }}>{w.cat}</div>}
               </div>
             ))}
-            <Btn kind="primary" disabled={busy} onClick={async () => { setBusy(true); await tableCall("next_hand", table.id); setBusy(false); }} style={{ marginTop: 10, width: "100%" }}>Next hand</Btn>
+            <Btn kind="primary" disabled={busy} onClick={async () => { haptic("light"); setBusy(true); await tableCall("next_hand", table.id); setBusy(false); }} style={{ marginTop: 10, width: "100%" }}>Next hand</Btn>
           </div>
         )}
       </div>
@@ -3355,6 +3426,11 @@ function MpTableScreen({ table, mySeat, profile, onLeft }) {
         ) : (
           <div style={{ textAlign: "center", color: T.faint, fontSize: 13, paddingTop: 18 }}>
             {result ? "Hand complete" : pub.toAct >= 0 ? `${pub.players[pub.toAct].name} is thinking…` : "Dealing…"}
+            {afkRemaining <= 15 && pub.toAct >= 0 && pub.toAct !== mySeat && pub.street !== "result" && (
+              <div style={{ fontSize: 12, color: afkRemaining <= 5 ? T.bad : T.brass, marginTop: 8 }}>
+                Auto-fold in {afkRemaining}s{afkStreakRef.current[pub.toAct] >= 1 ? " · 2nd miss = kick" : ""}
+              </div>
+            )}
             {stalled && (
               <div style={{ marginTop: 10 }}>
                 <Btn kind="felt" onClick={() => tableCall("kick_check", table.id)} style={{ fontSize: 12, padding: "8px 14px" }}>Skip stalled player</Btn>
@@ -3378,20 +3454,26 @@ function MpReviewScreen({ tableId, go }) {
     })();
   }, [tableId]); // eslint-disable-line
   return (
-    <div style={{ padding: "22px 18px 90px", height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: "24px 18px 96px", height: "100%", overflowY: "auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <div className="serif" style={{ fontSize: 25, color: T.card }}>Table review</div>
+        <div className="serif" style={{ fontSize: 27, color: T.card }}>The hand back</div>
         <button onClick={() => go("home")} style={{ background: "none", border: "none", color: T.brass, fontSize: 13 }}>Done</button>
       </div>
       <div style={{ fontSize: 12.5, color: T.mist, marginTop: 6, lineHeight: 1.5 }}>
         Your bets and bluffs, scored against how these specific players actually play. Their stats stay private, only the verdicts reach you.
+        Cards shown at showdown via host client. If cards weren't visible, the hand ended before all cards were shared.
       </div>
       {state === "loading" && <div style={{ color: T.faint, fontSize: 13, marginTop: 24, textAlign: "center" }}>Scoring your decisions…</div>}
       {state === "error" && <div style={{ color: T.bad, fontSize: 13, marginTop: 24 }}>Couldn't load the review, is the table-review function deployed?</div>}
-      {data && data.summary && data.summary.scored > 0 && (
-        <div style={{ background: T.baize2, border: "1px solid " + T.line, borderRadius: 14, padding: 16, marginTop: 16 }}>
-          <span className="mono" style={{ fontSize: 22, fontWeight: 600, color: data.summary.netAdjBB >= 0 ? T.good : T.bad }}>{data.summary.netAdjBB >= 0 ? "+" : ""}{data.summary.netAdjBB} bb</span>
-          <div style={{ fontSize: 12, color: T.mist, marginTop: 4 }}>expected value of your {data.summary.scored} aggressive move{data.summary.scored === 1 ? "" : "s"} across {data.summary.hands} hands, vs this exact lineup</div>
+      {data && data.summary && (
+        <div style={{ background: T.baize2, border: "1px solid " + T.line, borderRadius: 14, padding: 18, marginTop: 12 }}>
+          <div style={{ display: "flex", alignItems: "stretch" }}>
+            <StatChip label="BB earned" value={(data.summary.netAdjBB >= 0 ? "+" : "") + data.summary.netAdjBB} accent={data.summary.netAdjBB >= 0 ? T.good : T.bad} />
+            <div style={{ width: 1, background: T.line, margin: "4px 0" }} />
+            <StatChip label="Decisions" value={data.summary.scored} accent={T.brass} />
+            <div style={{ width: 1, background: T.line, margin: "4px 0" }} />
+            <StatChip label="Hands" value={data.summary.hands} accent={T.mist} />
+          </div>
         </div>
       )}
       {data && data.decisions && data.decisions.length === 0 && state === "done" && (
@@ -3908,11 +3990,12 @@ export default function App() {
         if (!g || g.toAct !== idx || g.handNo !== hn || g.street === "result") return g;
         return applyAction(g, idx, decideAI(g, idx), { name: g.players[idx].name });
       });
-    }, 600 + Math.random() * 800);
+    }, 800 + Math.random() * 1200);
     return () => clearTimeout(t);
   }, [game && game.toAct, game && game.street, game && game.handNo, game && game.log.length]); // eslint-disable-line
 
   const onHeroAct = useCallback((act) => {
+    haptic(act.type === "raise" ? "medium" : act.type === "fold" ? "light" : "light");
     setGame((g) => {
       if (!g || g.toAct !== 0) return g;
       const eq = equityRef.current;
@@ -4010,6 +4093,11 @@ export default function App() {
     // Persist the completed analysis so the review survives a page refresh.
     // Cleared on ReviewScreen unmount (Done button, NavBar tap, or any exit).
     try { localStorage.setItem("riq_active_review", JSON.stringify(analysis)); } catch {}
+    try {
+      const _today = new Date().toISOString().slice(0, 10);
+      const _prev = parseInt(localStorage.getItem("riq_session_hands_" + _today) || "0", 10);
+      localStorage.setItem("riq_session_hands_" + _today, String(Math.min(_prev + analysis.stats.hands, 10)));
+    } catch {}
     setRating(newRating);
     setRatingHistory((h) => [...h, newRating]);
     setSessions((s) => [...s, analysis]);
