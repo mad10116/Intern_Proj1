@@ -1316,6 +1316,7 @@ function NavBar({ screen, go }) {
   const items = [
     { id: "home", label: "Home", glyph: "♣" },
     { id: "play", label: "Play", glyph: "♠" },
+    { id: "log", label: "Log", glyph: "◈" },
     { id: "learn", label: "Learn", glyph: "♦" },
     { id: "profile", label: "Profile", glyph: "♥" },
   ];
@@ -1326,11 +1327,10 @@ function NavBar({ screen, go }) {
         const learnScreens = ["learn", "module"];
         const on = it.id === "play" ? playScreens.includes(screen) : it.id === "learn" ? learnScreens.includes(screen) : screen === it.id;
         const red = it.glyph === "♥" || it.glyph === "♦";
-        // each suit keeps its identity: full brass/cordovan when active, a clearly visible dimmer tint when not
         const glyphColor = on ? (red ? T.cordovan : T.brass) : (red ? "rgba(224,113,107,.7)" : "rgba(201,165,70,.72)");
         return (
           <button key={it.id} onClick={() => go(it.id)} aria-label={it.label} style={{ flex: 1, padding: "10px 0 8px", background: "none", border: "none", color: on ? (red ? T.cordovan : T.brass) : T.mist }}>
-            <div style={{ fontSize: 20, lineHeight: 1, color: glyphColor }}>{it.glyph}</div>
+            <div style={{ fontSize: it.glyph === "◈" ? 16 : 20, lineHeight: 1, color: glyphColor }}>{it.glyph}</div>
             <div style={{ fontSize: 10, marginTop: 3, letterSpacing: ".05em", textTransform: "uppercase", fontWeight: on ? 700 : 500, color: on ? (red ? T.cordovan : T.brass) : T.mist }}>{it.label}</div>
           </button>
         );
@@ -2463,7 +2463,105 @@ function AuthScreen({ onAuthed, pendingJoin }) {
     </div>
   );
 }
-function HomeScreen({ user, sessions, lifetime, rating, go, streak, daily, onDailyDrill, trainerState, ratingHistory, onOpenHands, sessionHandCount = 0 }) {
+const STREAK_MILESTONES = [
+  [3, "Crimson card back"],
+  [7, "Gold card back"],
+  [14, "Midnight felt"],
+  [30, "Royal card back"],
+];
+
+function StreakCard({ streak, streakDay, daily, trainerState }) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayDone = daily.drill && daily.session;
+  const shields = (trainerState && trainerState.shields) || 0;
+  const DAY_ABBR = ["Su", "M", "T", "W", "Th", "F", "Sa"];
+
+  // Rolling last-7-days window
+  const last7 = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(Date.now() - (6 - i) * 86400000);
+    return { date: d.toISOString().slice(0, 10), label: DAY_ABBR[d.getDay()] };
+  });
+
+  const isDone = (dateStr) => {
+    if (dateStr === todayStr) return todayDone;
+    if (!streakDay || streak <= 0) return false;
+    const diffDays = Math.round((new Date(streakDay) - new Date(dateStr)) / 86400000);
+    return diffDays >= 0 && diffDays < streak;
+  };
+
+  const nextMs = STREAK_MILESTONES.find(([d]) => streak < d);
+  const msProgress = nextMs ? Math.min(1, streak / nextMs[0]) : 1;
+  const daysToNext = nextMs ? nextMs[0] - streak : 0;
+
+  return (
+    <div style={{ background: T.baize2, border: `1px solid ${todayDone ? "rgba(127,201,127,.35)" : T.line}`, borderRadius: 14, padding: "14px 16px", marginTop: 16, marginBottom: 4 }}>
+      {/* Header: streak number + today status */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 7 }}>
+          <span className="serif" style={{ fontSize: 34, lineHeight: 1, color: streak > 0 ? T.cordovan : T.faint }}>{streak}</span>
+          <span style={{ fontSize: 13, color: T.mist }}>day streak</span>
+          {shields > 0 && (
+            <span className="mono" style={{ fontSize: 10, color: T.brass, background: "rgba(201,165,70,.1)", border: `1px solid ${T.line}`, borderRadius: 6, padding: "1px 6px", marginLeft: 2 }}>
+              {shields} shield{shields !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+        <div style={{ textAlign: "right" }}>
+          {todayDone
+            ? <span style={{ fontSize: 11, color: T.good, fontWeight: 600 }}>✓ Banked today</span>
+            : streak > 0
+            ? <span style={{ fontSize: 11, color: T.brass, animation: "riqShimmer 2s ease infinite" }}>Play to keep it</span>
+            : <span style={{ fontSize: 11, color: T.faint }}>Start your streak</span>}
+        </div>
+      </div>
+
+      {/* 7-day dot chain */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
+        {last7.map(({ date, label }, i) => {
+          const done = isDone(date);
+          const isToday = date === todayStr;
+          const dotColor = done ? T.good : isToday ? T.brass : T.line;
+          return (
+            <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: "50%",
+                background: done ? (isToday ? T.good : "rgba(127,201,127,.22)") : "transparent",
+                border: `2px solid ${dotColor}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                animation: isToday && !done ? "riqPulse 2s ease infinite" : "none",
+                transition: "background .3s, border-color .3s",
+              }}>
+                {done
+                  ? <span style={{ fontSize: 12, color: isToday ? T.baize : T.good, fontWeight: 700 }}>✓</span>
+                  : isToday
+                  ? <span style={{ fontSize: 8, color: T.brass }}>◆</span>
+                  : null}
+              </div>
+              <span style={{ fontSize: 9.5, color: isToday ? T.brass : done ? "#9AB3A4" : T.faint, fontWeight: isToday ? 700 : 400, letterSpacing: ".04em" }}>{label}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Milestone progress bar */}
+      {nextMs ? (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
+            <span style={{ fontSize: 11, color: T.mist }}>Next: {nextMs[1]}</span>
+            <span className="mono" style={{ fontSize: 10, color: T.brass }}>{daysToNext} day{daysToNext !== 1 ? "s" : ""} away</span>
+          </div>
+          <div style={{ height: 4, borderRadius: 2, background: "rgba(201,165,70,.1)", overflow: "hidden" }}>
+            <div style={{ height: "100%", borderRadius: 2, background: `linear-gradient(90deg, ${T.brassDim}, ${T.brass})`, width: `${msProgress * 100}%`, transition: "width .6s ease" }} />
+          </div>
+        </div>
+      ) : (
+        <div style={{ fontSize: 11, color: T.good, textAlign: "center" }}>All milestones unlocked ✓</div>
+      )}
+    </div>
+  );
+}
+
+function HomeScreen({ user, sessions, lifetime, rating, go, streak, streakDay, daily, onDailyDrill, trainerState, ratingHistory, onOpenHands, sessionHandCount = 0 }) {
   const last = sessions[sessions.length - 1];
   const lastDelta = last ? last.ratingDelta : null;
   const hr = new Date().getHours();
@@ -2518,7 +2616,9 @@ function HomeScreen({ user, sessions, lifetime, rating, go, streak, daily, onDai
         ♠ &nbsp;Take a seat
       </Btn>
 
-      <SectionTitle right={streak > 0 ? <span className="mono" style={{ fontSize: 13, color: T.cordovan }}>{streak} day{streak === 1 ? "" : "s"}</span> : null}>Daily</SectionTitle>
+      <StreakCard streak={streak} streakDay={streakDay} daily={daily} trainerState={trainerState} />
+
+      <SectionTitle>Daily</SectionTitle>
       <div style={{ display: "flex", gap: 7, marginBottom: 10 }}>
         {[["pre", "Preflop Opens"], ["price", "River Calls"], ["value", "Value Sizing"]].map(([fam, label]) => {
           const sel = scenarioFamily === fam;
@@ -2546,16 +2646,14 @@ function HomeScreen({ user, sessions, lifetime, rating, go, streak, daily, onDai
             </div>
           ))}
         </div>
-        {(streak > 0 || reviewDue || (trainerState && trainerState.shields > 0)) && (
-          <div style={{ fontSize: 11, color: T.faint, marginTop: 9, paddingTop: 9, borderTop: `1px solid ${T.line}` }}>
-            Milestones at 3, 7, 14, 30 days unlock card backs and felts.
-            {trainerState && trainerState.shields > 0 && <span style={{ color: T.brass }}> {trainerState.shields} shield{trainerState.shields === 1 ? "" : "s"} banked.</span>}
-            {reviewDue && <span style={{ color: T.cordovan }}> A review is due today.</span>}
+        {reviewDue && (
+          <div style={{ fontSize: 11, color: T.cordovan, marginTop: 9, paddingTop: 9, borderTop: `1px solid ${T.line}` }}>
+            A review is due today.
           </div>
         )}
       </button>
 
-      <SectionTitle>Last session</SectionTitle>
+      <SectionTitle right={<button onClick={() => go("log")} style={{ background: "none", border: "none", color: T.brass, fontSize: 12, padding: 0, whiteSpace: "nowrap" }}>All sessions →</button>}>Last session</SectionTitle>
       {last ? (
         <button onClick={() => go("review")} style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.line, borderRadius: 12, padding: "16px 18px", color: T.card }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -3748,6 +3846,546 @@ function FeedbackWidget({ screen, profile, rating }) {
   );
 }
 
+/* ============================ LOG SCREEN ============================ */
+const ACTION_EXPLAIN = {
+  fold: {
+    preflop: { msg: "You folded a hand that was profitable to continue with.", fix: "When the pot is offering a good price and you have live cards, folding is costing you money.", module: "range-1" },
+    flop:   { msg: "You folded on the flop when the pot was offering a profitable price to continue.", fix: "When the bet is small relative to the pot, a weak but live hand is often worth a call.", module: "range-1" },
+    turn:   { msg: "You folded on the turn when continuing was the better play.", fix: "Check the pot odds: if what you need to call is less than your equity × the pot, call.", module: "range-1" },
+    river:  { msg: "You folded on the river and gave up a winning call.", fix: "On the river, if the bet is small and you can beat some bluffs, lean toward calling.", module: "range-1" },
+  },
+  call: {
+    preflop: { msg: "You called before the flop with a hand that didn't justify the price.", fix: "Against raises, stick to hands you'd happily re-raise — pairs, big aces, strong connectors.", module: "pre-1" },
+    flop:    { msg: "You called on the flop without enough equity to justify it.", fix: "Quick math: if you need to call more than your win% × pot, it's a fold.", module: "size-1" },
+    turn:    { msg: "You paid too much to chase on the turn.", fix: "Each street gets more expensive — make sure your hand has real outs or solid equity.", module: "size-1" },
+    river:   { msg: "You called on the river without the odds to support it.", fix: "On the river there are no more cards; the decision is purely about pot odds vs. your hand strength.", module: "size-1" },
+  },
+  check: {
+    flop:  { msg: "You checked a strong hand on the flop and gave a free card.", fix: "When you have the best hand, bet it — roughly half the pot builds value.", module: "post-1" },
+    turn:  { msg: "You checked a strong hand on the turn, costing yourself value.", fix: "On the turn the pot is bigger; a bet here is almost always right with a strong hand.", module: "post-1" },
+    river: { msg: "You checked the river with a hand strong enough to bet for value.", fix: "The river is your last chance to get paid — a bet of 40–60% pot is right.", module: "post-1" },
+  },
+  raise: {
+    preflop: { msg: "You raised before the flop with a hand not strong enough to justify it.", fix: "Re-raises should be reserved for your best hands — fold the borderline ones.", module: "pre-2" },
+    flop:    { msg: "You raised on the flop as a bluff without enough equity to back it up.", fix: "Bluffs need a plan: a real draw, or a board you're credibly representing.", module: "bluff-1" },
+    turn:    { msg: "You raised on the turn as a bluff with very little equity.", fix: "Turn bluffs are expensive — only push when you have a draw or real fold equity.", module: "bluff-1" },
+    river:   { msg: "You raised on the river as a bluff without enough fold equity.", fix: "River bluffs only work against specific opponents. Against callers, give it up.", module: "bluff-1" },
+  },
+};
+
+/* Multiple plain-language variants per mistake type, indexed by hand number so
+   the same mistake in different hands shows a different sentence. */
+const MISTAKE_VARIANTS = {
+  fold_preflop: [
+    "Folded before the flop when the hand was strong enough to play.",
+    "That fold cost chips — the cards deserved a raise, not a muck.",
+    "Tossed a playable hand. From that seat, this one gets raised.",
+    "Let go too early. Strong hands before the flop open the pot, they don't fold to it.",
+  ],
+  fold_flop: [
+    "Gave up on the flop when the price to continue was still reasonable.",
+    "Folded too cheaply on the flop — the bet wasn't big enough to justify it.",
+    "Let them take the pot without a fight. Worth a call here.",
+    "Flop fold when sticking around was the right call. Check what they bet vs the pot.",
+  ],
+  fold_turn: [
+    "Folded the turn with enough hand left to keep going.",
+    "Gave up mid-hand when a call was still correct.",
+    "Turn fold when continuing was the better move. The pot was offering a decent price.",
+    "Let go on the turn — the bet wasn't large enough to make folding right.",
+  ],
+  fold_river: [
+    "Folded the river when the price was small enough to call.",
+    "Let go at the end — small river bets are often bluffs worth paying off.",
+    "River fold that likely gave away a pot. When the bet is tiny, calling is usually right.",
+    "Gave up the river too cheap. That's the exact spot to hang in there.",
+  ],
+  call_preflop: [
+    "Called before the flop with a hand that wasn't worth the price.",
+    "Came in with a weak holding — raise the strong ones, fold the rest.",
+    "Preflop call that went in with too little to back it up.",
+    "That call was with a hand better suited to folding here.",
+  ],
+  call_flop: [
+    "Called on the flop when the math said fold.",
+    "Paid to chase on the flop — the hand wasn't worth the price of the bet.",
+    "Flop call without enough equity. The bet was asking for more than the hand was worth.",
+    "Called the flop with a hand that didn't justify continuing.",
+  ],
+  call_turn: [
+    "Chased on the turn — the price was higher than the hand's chances of winning.",
+    "Kept going when folding saves more chips. Fewer cards left, higher cost.",
+    "Called the turn without enough equity. Getting expensive to chase at this point.",
+    "Turn call that cost more than it should. The hand needed to be stronger to justify it.",
+  ],
+  call_river: [
+    "Called the river without the hand to beat a real bet.",
+    "Paid off at the end — worth asking what they'd bet here that you actually beat.",
+    "River call without the right odds. Last street calls need a strong hand or a great price.",
+    "Called the end when folding was cheaper. River bets usually mean business.",
+  ],
+  check_flop: [
+    "Checked the flop with a strong hand and gave a free card.",
+    "Missed a bet — big hands build pots, they don't give free looks.",
+    "Let them see the turn for free when you had the best of it.",
+    "Strong flop hand, no bet. That's chips left on the table.",
+  ],
+  check_turn: [
+    "Checked the turn with a hand worth betting. Free cards cost money.",
+    "Missed the turn bet — strong hands charge, they don't invite free cards.",
+    "Checked when a bet protects the hand and builds the pot at the same time.",
+    "Turn check with a strong holding. The time to bet is when you have it.",
+  ],
+  check_river: [
+    "Checked the river and left money behind. Last chance to get paid.",
+    "Missed the river bet — strong hands deserve a price tag at the end.",
+    "Let them off free at the end. A bet here gets called by worse hands.",
+    "Checked the river when a bet wins more. That's a missed opportunity.",
+  ],
+  raise_preflop: [
+    "Re-raised before the flop with a hand that didn't quite earn it.",
+    "Built a big pot with a medium hand. Re-raises should come with strong holdings.",
+    "That preflop re-raise put a lot in the middle with not enough to back it up.",
+    "Raised over a raise when calling or folding was the better play.",
+  ],
+  raise_flop: [
+    "Raised as a bluff on the flop without anything to fall back on.",
+    "Flop raise without a real hand or a draw. Bluffs need something behind them.",
+    "Pushed on the flop without the cards or the draw to support it.",
+    "Bluffed the flop — a good move sometimes, but not with this hand.",
+  ],
+  raise_turn: [
+    "Bluffed the turn with a hand unlikely to get folds.",
+    "Pushed on the turn without enough equity. Turn bluffs are expensive.",
+    "Raised the turn without the hand to back it up.",
+    "Turn aggression without the goods. Hard to get folds this deep in the hand.",
+  ],
+  raise_river: [
+    "Bluffed the river when giving up was the better play.",
+    "River bluff without a real reason to think they'd fold.",
+    "Raised at the end without the hand for it — usually better to check.",
+    "Pushed the river as a bluff. River bluffs are the hardest to pull off.",
+  ],
+};
+
+const CLEAN_VARIANTS = {
+  fold_preflop: [
+    "Good laydown — saved the chips for a better spot.",
+    "Right call to fold. Not every hand is worth playing.",
+    "Clean fold before the flop. Discipline here is underrated.",
+    "Folded the hands worth folding. That's how you stay ahead over time.",
+  ],
+  won_aggressive: [
+    "Raised in the right spot and took the pot. Well done.",
+    "Good aggression — put them in a tough spot and it paid off.",
+    "Bet when it mattered and got rewarded. That's the right instinct.",
+    "Well-timed pressure. That's exactly how pots get won.",
+  ],
+  won_call: [
+    "Made the right call and it paid off.",
+    "Held your ground in the right spot.",
+    "Good read — called correctly and got the result.",
+    "Stuck around for the right price and it worked out.",
+  ],
+  won_passive: [
+    "Let the hand play out the right way and took the chips.",
+    "Solid play — patient and correct.",
+    "Let them make the mistake. Good discipline.",
+    "Played it patient and came out ahead.",
+  ],
+  lost_correctly: [
+    "Played it right but the cards didn't cooperate. That happens.",
+    "Correct decision, rough result. Right plays don't always win the hand.",
+    "Good poker, bad luck. Keep making those calls.",
+    "Made the right move and ran into a better hand. Nothing wrong here.",
+  ],
+  minor_mistake: [
+    "Nearly clean — one small thing, but the main decisions were right.",
+    "Close to textbook. A minor detail, the instincts were solid.",
+    "Mostly right. One small tweak but the big calls were correct.",
+    "Good hand overall. One small thing to keep in mind.",
+  ],
+};
+
+function handFeedback(hand) {
+  const actions = hand.actions || [];
+  const mistakes = actions.filter((a) => a.is_optimal === false);
+  const net = hand.result_chips || 0;
+  const n = hand.hand_number || 0;
+  const pick = (arr) => arr[n % arr.length];
+
+  if (mistakes.length === 0) {
+    const hasRaise = actions.some((a) => a.action_type === "raise");
+    const hasCall = actions.some((a) => a.action_type === "call");
+    const onlyPreflop = actions.length > 0 && actions.every((a) => a.street === "preflop");
+    const foldedPreflop = onlyPreflop && actions.some((a) => a.action_type === "fold");
+    if (foldedPreflop) return { msg: pick(CLEAN_VARIANTS.fold_preflop), color: T.good, module: null };
+    if (net > 0 && hasRaise) return { msg: pick(CLEAN_VARIANTS.won_aggressive), color: T.good, module: null };
+    if (net > 0 && hasCall) return { msg: pick(CLEAN_VARIANTS.won_call), color: T.good, module: null };
+    if (net > 0) return { msg: pick(CLEAN_VARIANTS.won_passive), color: T.good, module: null };
+    if (net < 0) return { msg: pick(CLEAN_VARIANTS.lost_correctly), color: T.mist, module: null };
+    return { msg: "Played it clean.", color: T.good, module: null };
+  }
+
+  const worst = [...mistakes].sort((a, b) => (b.ev_loss || 0) - (a.ev_loss || 0))[0];
+  const totalEvLoss = mistakes.reduce((s, m) => s + (m.ev_loss || 0), 0);
+
+  // Very minor mistake — treat as near-clean
+  if (totalEvLoss < 0.35) return { msg: pick(CLEAN_VARIANTS.minor_mistake), color: T.mist, module: null };
+
+  const key = `${worst.action_type}_${worst.street}`;
+  const variants = MISTAKE_VARIANTS[key];
+  const ex = (ACTION_EXPLAIN[worst.action_type] || {})[worst.street];
+  const module = ex ? ex.module : null;
+  const msg = variants ? pick(variants) : `${worst.action_type} on the ${worst.street} was the wrong move here.`;
+  return { msg, color: T.bad, module };
+}
+
+function HandDetailSheet({ hand, openModule, onClose }) {
+  const mistakes = (hand.actions || []).filter((a) => a.is_optimal === false).sort((a, b) => (b.ev_loss || 0) - (a.ev_loss || 0));
+  const topModule = (() => {
+    const ex = mistakes[0] ? (ACTION_EXPLAIN[mistakes[0].action_type] || {})[mistakes[0].street] : null;
+    return ex ? ex.module : null;
+  })();
+  return (
+    <>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+        <div className="serif" style={{ fontSize: 20, color: T.card }}>Hand #{(hand.hand_number || 0) + 1}</div>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: T.brass, fontSize: 13 }}>Close</button>
+      </div>
+      <div style={{ display: "flex", gap: 5, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+        {(hand.hero_cards || []).map((c, i) => <PlayingCard key={i} card={c} w={38} />)}
+        {(hand.board_cards || []).length > 0 && <span style={{ color: T.faint, margin: "0 6px", fontSize: 12 }}>vs board</span>}
+        {(hand.board_cards || []).map((c, i) => <PlayingCard key={i} card={c} w={28} />)}
+      </div>
+      {mistakes.map((m, i) => {
+        const ex = (ACTION_EXPLAIN[m.action_type] || {})[m.street];
+        return (
+          <div key={i} style={{ marginBottom: 10, padding: "12px 14px", borderRadius: 11, background: "rgba(224,113,107,.07)", border: "1px solid rgba(224,113,107,.25)" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "baseline", marginBottom: 5 }}>
+              <span className="mono" style={{ fontSize: 10, color: T.bad, textTransform: "uppercase", letterSpacing: ".1em" }}>{m.action_type} on {m.street}</span>
+              {m.ev_loss > 0 && <span className="mono" style={{ fontSize: 10, color: T.bad }}>−{Number(m.ev_loss).toFixed(1)} bb</span>}
+            </div>
+            {ex ? (
+              <>
+                <div style={{ fontSize: 13, color: "#D8E2DA", lineHeight: 1.55 }}>{ex.msg}</div>
+                <div style={{ fontSize: 12.5, color: T.mist, lineHeight: 1.5, marginTop: 6, paddingLeft: 10, borderLeft: `2px solid ${T.brass}` }}>
+                  <b style={{ color: T.brass }}>Fix:</b> {ex.fix}
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 13, color: T.mist, lineHeight: 1.55 }}>This decision cost an estimated {Number(m.ev_loss || 0).toFixed(1)} bb in expected value.</div>
+            )}
+          </div>
+        );
+      })}
+      {topModule && MODULE_INDEX[topModule] && (
+        <Btn kind="felt" onClick={() => { openModule(topModule); onClose(); }} style={{ width: "100%", marginTop: 4 }}>
+          Drill this → {MODULE_INDEX[topModule].title}
+        </Btn>
+      )}
+    </>
+  );
+}
+
+/* Chip trajectory SVG — no axes, just the story of the session */
+function ChipTrajectory({ hands }) {
+  if (!hands || hands.length < 2) return null;
+  const cumulative = [];
+  let running = 0;
+  hands.forEach((h) => { running += h.result_chips || 0; cumulative.push(running); });
+
+  const W = 300, H = 60;
+  const minV = Math.min(0, ...cumulative), maxV = Math.max(0, ...cumulative);
+  const range = maxV - minV || 1;
+  const xOf = (i) => (i / (cumulative.length - 1)) * W;
+  const yOf = (v) => H - ((v - minV) / range) * (H - 4) - 2;
+  const zeroY = yOf(0);
+  const pts = cumulative.map((v, i) => `${xOf(i)},${yOf(v)}`).join(" ");
+
+  const peakIdx = cumulative.indexOf(Math.max(...cumulative));
+  const valleyIdx = cumulative.indexOf(Math.min(...cumulative));
+  const peakVal = cumulative[peakIdx];
+  const valleyVal = cumulative[valleyIdx];
+  const finalNet = cumulative[cumulative.length - 1];
+  const lineColor = finalNet >= 0 ? T.good : T.bad;
+
+  // One-sentence story based on trajectory shape
+  const midpoint = Math.floor(cumulative.length / 2);
+  const firstHalfPeak = peakIdx < midpoint;
+  const firstHalfValley = valleyIdx < midpoint;
+  let story = null;
+  if (peakVal > 100 && firstHalfPeak && finalNet < peakVal * 0.5)
+    story = `You built a lead early but gave most of it back — the flagged hands show where it slipped away.`;
+  else if (valleyVal < -100 && firstHalfValley && finalNet > valleyVal * 0.5)
+    story = `Rough start, but you clawed back — the hands you recovered on are worth studying too.`;
+  else if (finalNet > 200)
+    story = `A solid session. Keep the same approach and the chips keep coming.`;
+  else if (finalNet < -200)
+    story = `A losing session — the flagged hands below show the specific moments that cost the most.`;
+  else
+    story = `A tight session, close to even. Small adjustments on the flagged hands could flip it.`;
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: "block", height: 64, borderRadius: 6 }}>
+        <defs>
+          <linearGradient id="chipGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={lineColor} stopOpacity="0.18" />
+            <stop offset="100%" stopColor={lineColor} stopOpacity="0.03" />
+          </linearGradient>
+        </defs>
+        {/* Zero baseline */}
+        <line x1={0} y1={zeroY} x2={W} y2={zeroY} stroke="rgba(201,165,70,.25)" strokeWidth="1" strokeDasharray="4,4" vectorEffect="non-scaling-stroke" />
+        {/* Fill under curve */}
+        <polygon points={`${xOf(0)},${zeroY} ${pts} ${xOf(cumulative.length - 1)},${zeroY}`} fill="url(#chipGrad)" />
+        {/* Main line */}
+        <polyline points={pts} fill="none" stroke={lineColor} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        {/* Peak dot */}
+        {peakVal > 80 && <circle cx={xOf(peakIdx)} cy={yOf(peakVal)} r="3.5" fill={T.good} vectorEffect="non-scaling-stroke" />}
+        {/* Valley dot */}
+        {valleyVal < -80 && <circle cx={xOf(valleyIdx)} cy={yOf(valleyVal)} r="3.5" fill={T.bad} vectorEffect="non-scaling-stroke" />}
+      </svg>
+      {/* Peak / valley callouts */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
+        {peakVal > 80 && <span style={{ fontSize: 10, color: T.good }}>▲ +{peakVal} hand {peakIdx + 1}</span>}
+        {valleyVal < -80 && <span style={{ fontSize: 10, color: T.bad, marginLeft: "auto" }}>▼ {valleyVal} hand {valleyIdx + 1}</span>}
+      </div>
+      {/* Coaching sentence */}
+      <div style={{ fontSize: 12.5, color: T.mist, lineHeight: 1.55, marginTop: 8, fontStyle: "italic" }}>{story}</div>
+    </div>
+  );
+}
+
+function LogScreen({ profile, go, openModule }) {
+  const [sessions, setSessions] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+  const [handsMap, setHandsMap] = useState({});
+  const [selectedHand, setSelectedHand] = useState(null);
+  const [renamingId, setRenamingId] = useState(null);
+  const [nameInput, setNameInput] = useState("");
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all"); // "all" | "win" | "loss"
+
+  useEffect(() => {
+    if (!profile) return;
+    (async () => {
+      const rows = await dbSelect("sessions", `user_id=eq.${profile.id}&select=id,started_at,ended_at,hands_played,net_chips,name,analysis_json&order=started_at.desc&limit=60`);
+      setSessions(rows || []);
+    })();
+  }, [profile && profile.id]); // eslint-disable-line
+
+  async function expandSession(sess) {
+    if (expandedId === sess.id) { setExpandedId(null); return; }
+    setExpandedId(sess.id);
+    if (handsMap[sess.id]) return;
+    const hands = await dbSelect("hands", `session_id=eq.${sess.id}&select=id,hand_number,hero_cards,board_cards,result_chips,street_reached,actions(street,action_type,is_optimal,ev_loss)&order=hand_number.asc`);
+    setHandsMap((m) => ({ ...m, [sess.id]: hands || [] }));
+  }
+
+  async function saveSessionName(id, name) {
+    const trimmed = name.trim();
+    await dbUpdate("sessions", `id=eq.${id}`, { name: trimmed || null });
+    setSessions((ss) => ss.map((s) => s.id === id ? { ...s, name: trimmed || null } : s));
+    setRenamingId(null);
+  }
+
+  const fmtDate = (iso) => { const d = new Date(iso); return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
+  const total = (sessions || []).length;
+
+  const filtered = (sessions || []).filter((sess, idx) => {
+    const net = sess.net_chips || 0;
+    if (filter === "win" && net <= 0) return false;
+    if (filter === "loss" && net >= 0) return false;
+    if (!query.trim()) return true;
+    const q = query.toLowerCase();
+    const name = (sess.name || `session #${total - idx} · ${fmtDate(sess.started_at)}`).toLowerCase();
+    const leak = sess.analysis_json && sess.analysis_json.leaks && sess.analysis_json.leaks[0] ? sess.analysis_json.leaks[0].title.toLowerCase() : "";
+    return name.includes(q) || leak.includes(q);
+  });
+
+  return (
+    <div style={{ padding: "22px 18px 90px", height: "100%", overflowY: "auto" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+        <div className="serif" style={{ fontSize: 25, color: T.card }}>Session log</div>
+        <button onClick={() => go("home")} style={{ background: "none", border: "none", color: T.brass, fontSize: 13 }}>Done</button>
+      </div>
+
+      {/* Search bar */}
+      <div style={{ position: "relative", marginBottom: 10 }}>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by name, date, or leak…"
+          style={{ width: "100%", padding: "10px 36px 10px 14px", borderRadius: 10, border: "1px solid " + T.line, background: T.baize2, color: T.card, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+        />
+        {query && (
+          <button onClick={() => setQuery("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: T.faint, fontSize: 16, lineHeight: 1, padding: 0 }}>✕</button>
+        )}
+      </div>
+
+      {/* Win / Loss filter chips */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        {[["all", "All"], ["win", "Wins"], ["loss", "Losses"]].map(([id, label]) => (
+          <button key={id} onClick={() => setFilter(id)} style={{ padding: "5px 14px", borderRadius: 99, fontSize: 12, fontWeight: filter === id ? 700 : 500, border: `1px solid ${filter === id ? T.brass : T.line}`, background: filter === id ? "rgba(201,165,70,.14)" : "transparent", color: filter === id ? T.brass : T.mist }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {sessions === null && (
+        [0, 1, 2].map((i) => (
+          <div key={i} style={{ height: 72, borderRadius: 14, background: T.baize2, border: "1px solid " + T.line, marginBottom: 10, animation: `riqShimmer 1.2s ease ${i * 0.15}s infinite` }} />
+        ))
+      )}
+      {sessions !== null && filtered.length === 0 && (
+        <div style={{ color: T.mist, fontSize: 14, marginTop: 40, textAlign: "center", lineHeight: 1.6 }}>
+          {sessions.length === 0 ? "No sessions yet — play a hand and come back." : "No sessions match that search."}
+        </div>
+      )}
+
+      {filtered.map((sess, idx) => {
+        const sessionNum = total - (sessions || []).indexOf(sess);
+        const defaultName = `Session #${sessionNum} · ${fmtDate(sess.started_at)}`;
+        const displayName = sess.name || defaultName;
+        const net = sess.net_chips || 0;
+        const analysis = sess.analysis_json;
+        const accuracy = analysis ? analysis.accuracy : null;
+        const topLeak = analysis && analysis.leaks && analysis.leaks[0] ? analysis.leaks[0].title.toUpperCase() : null;
+        const isExpanded = expandedId === sess.id;
+        const hands = handsMap[sess.id];
+
+        return (
+          <div key={sess.id} style={{ marginBottom: 8 }}>
+            {/* Collapsed row */}
+            <button onClick={() => expandSession(sess)} style={{ width: "100%", textAlign: "left", background: T.baize2, border: `1px solid ${isExpanded ? T.brass : T.line}`, borderRadius: isExpanded ? "12px 12px 0 0" : 12, padding: "14px 16px", color: T.card }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {renamingId === sess.id ? (
+                    <input
+                      autoFocus
+                      value={nameInput}
+                      onChange={(e) => setNameInput(e.target.value)}
+                      onBlur={() => saveSessionName(sess.id, nameInput)}
+                      onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") saveSessionName(sess.id, nameInput); if (e.key === "Escape") setRenamingId(null); }}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ background: "transparent", border: "none", borderBottom: `1px solid ${T.brass}`, color: T.card, fontSize: 14, fontWeight: 600, width: "100%", outline: "none", padding: "2px 0", fontFamily: "inherit" }}
+                    />
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>{displayName}</span>
+                      <button onClick={(e) => { e.stopPropagation(); setRenamingId(sess.id); setNameInput(sess.name || ""); }} style={{ background: "none", border: "none", color: T.faint, fontSize: 11, padding: "0 3px", lineHeight: 1 }} title="Rename">✎</button>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 6, marginTop: 5, flexWrap: "wrap", alignItems: "center" }}>
+                    {accuracy != null && (
+                      <span className="mono" style={{ fontSize: 10, padding: "2px 7px", borderRadius: 99, background: accuracy >= 85 ? "rgba(127,201,127,.15)" : accuracy >= 65 ? "rgba(201,165,70,.15)" : "rgba(224,113,107,.15)", color: accuracy >= 85 ? T.good : accuracy >= 65 ? T.brass : T.bad, border: `1px solid ${accuracy >= 85 ? "rgba(127,201,127,.4)" : accuracy >= 65 ? T.line : "rgba(224,113,107,.4)"}` }}>
+                        {accuracy}% accuracy
+                      </span>
+                    )}
+                    {topLeak && (
+                      <span className="mono" style={{ fontSize: 10, padding: "2px 7px", borderRadius: 99, background: "rgba(224,113,107,.1)", color: T.bad, border: "1px solid rgba(224,113,107,.3)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {topLeak}
+                      </span>
+                    )}
+                    {sess.hands_played > 0 && <span style={{ fontSize: 11, color: T.faint }}>{sess.hands_played} hands</span>}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", marginLeft: 12, flexShrink: 0 }}>
+                  <div className="mono" style={{ fontSize: 18, fontWeight: 600, color: net >= 0 ? T.good : T.bad }}>{net >= 0 ? "+" : ""}{net.toLocaleString()}</div>
+                  <div style={{ fontSize: 9, color: T.faint, marginTop: 2 }}>{isExpanded ? "▲" : "▼"}</div>
+                </div>
+              </div>
+            </button>
+
+            {/* Expanded panel */}
+            {isExpanded && (
+              <div className="fadeup" style={{ background: "#0A1812", border: `1px solid ${T.brass}`, borderTop: "none", borderRadius: "0 0 12px 12px", padding: "14px 16px" }}>
+                {!hands ? (
+                  <div style={{ color: T.faint, fontSize: 12, textAlign: "center", padding: "12px 0" }}>Loading…</div>
+                ) : (
+                  <>
+                    {/* Chip trajectory — only when we have hand data */}
+                    {hands.length >= 2 && <ChipTrajectory hands={hands} />}
+
+                    {/* Coach note from analysis */}
+                    {analysis && analysis.plan && (
+                      <div style={{ fontSize: 13, color: "#D8E2DA", lineHeight: 1.6, marginBottom: 14, padding: "10px 12px", background: "rgba(201,165,70,.06)", borderRadius: 9, border: "1px solid " + T.line, borderLeft: `3px solid ${T.brass}` }}>
+                        {analysis.plan.split(".")[0]}.
+                      </div>
+                    )}
+
+                    {/* Per-hand list */}
+                    {hands.length === 0 ? (
+                      <div style={{ color: T.faint, fontSize: 12, textAlign: "center", padding: "12px 0" }}>No hand data for this session.</div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                        {hands.map((hand) => {
+                          const mistakes = (hand.actions || []).filter((a) => a.is_optimal === false);
+                          const hasMistake = mistakes.length > 0;
+                          const worst = mistakes.sort((a, b) => (b.ev_loss || 0) - (a.ev_loss || 0))[0];
+                          const hnet = hand.result_chips || 0;
+                          return (
+                            <button key={hand.id} onClick={() => hasMistake && setSelectedHand(hand)} style={{ width: "100%", textAlign: "left", background: hasMistake ? "rgba(224,113,107,.05)" : "rgba(127,201,127,.04)", border: `1px solid ${hasMistake ? "rgba(224,113,107,.22)" : "rgba(127,201,127,.18)"}`, borderRadius: 9, padding: "8px 12px", color: T.card, cursor: hasMistake ? "pointer" : "auto" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                                <span style={{ fontSize: 12, color: hasMistake ? T.bad : T.good, flexShrink: 0 }}>{hasMistake ? "⚑" : "✓"}</span>
+                                <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                                  {(hand.hero_cards || []).map((c, i) => (
+                                    <span key={i} className="mono" style={{ fontSize: 12, color: SUIT_RED[c.s] ? T.cordovan : T.card }}>{rankLabel(c.r)}{SUIT_GLYPH[c.s]}</span>
+                                  ))}
+                                </div>
+                                {(hand.board_cards || []).length > 0 && (
+                                  <>
+                                    <span style={{ color: T.faint, fontSize: 10 }}>·</span>
+                                    <div style={{ display: "flex", gap: 2 }}>
+                                      {(hand.board_cards || []).map((c, i) => (
+                                        <span key={i} className="mono" style={{ fontSize: 10, color: SUIT_RED[c.s] ? T.cordovan : T.mist }}>{rankLabel(c.r)}{SUIT_GLYPH[c.s]}</span>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                                <span className="mono" style={{ marginLeft: "auto", fontSize: 12, color: hnet >= 0 ? T.good : T.bad, flexShrink: 0 }}>{hnet >= 0 ? "+" : ""}{hnet}</span>
+                              </div>
+                                  {(() => {
+                                const fb = handFeedback(hand);
+                                return (
+                                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6, marginTop: 4, marginLeft: 19 }}>
+                                    <span style={{ fontSize: 11, color: fb.color, lineHeight: 1.45, flex: 1 }}>{fb.msg}</span>
+                                    {fb.module && MODULE_INDEX[fb.module] && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); openModule(fb.module); }}
+                                        style={{ flexShrink: 0, background: "none", border: `1px solid ${T.line}`, borderRadius: 6, color: T.brass, fontSize: 10, padding: "2px 7px", whiteSpace: "nowrap" }}
+                                      >
+                                        Drill →
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {selectedHand && (
+        <div onClick={() => setSelectedHand(null)} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(4,10,7,.78)", display: "flex", alignItems: "flex-end" }}>
+          <div onClick={(e) => e.stopPropagation()} className="fadeup" style={{ width: "100%", maxWidth: 480, margin: "0 auto", background: "#0E2218", borderTop: `3px solid ${T.bad}`, borderRadius: "18px 18px 0 0", padding: "18px 18px calc(28px + env(safe-area-inset-bottom))" }}>
+            <HandDetailSheet hand={selectedHand} openModule={openModule} onClose={() => setSelectedHand(null)} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ============================ APP ROOT ============================ */
 export default function App() {
   const [user, setUser] = useState(null);
@@ -4152,7 +4790,8 @@ export default function App() {
     (async () => {
       try {
         if (dbSessionId) {
-          await dbUpdate("sessions", `id=eq.${dbSessionId}`, { ended_at: new Date().toISOString(), hands_played: analysis.stats.hands, net_chips: analysis.stats.net });
+          const analysisForDb = { accuracy: analysis.accuracy, leaks: analysis.leaks, plan: analysis.plan, stats: analysis.stats, ratingDelta: analysis.ratingDelta };
+          await dbUpdate("sessions", `id=eq.${dbSessionId}`, { ended_at: new Date().toISOString(), hands_played: analysis.stats.hands, net_chips: analysis.stats.net, analysis_json: analysisForDb });
           sbFetch("/functions/v1/profile-sync", { method: "POST", body: JSON.stringify({ session_id: dbSessionId }) }).catch(() => {});
           dbSelect("player_profiles", `user_id=eq.${profile?.id}&select=*`).then((r) => r[0] && setTendencies(r[0]));
         }
@@ -4288,7 +4927,7 @@ export default function App() {
 
   let body;
   if (!user) body = <AuthScreen onAuthed={handleAuthed} pendingJoin={pendingJoin} />;
-  else if (screen === "home") body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={(s) => (s === "lobby" ? setScreen("lobby") : go(s))} streak={streak} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} sessionHandCount={daily.session ? 10 : Math.min((lastSession ? lastSession.stats.hands : 0), 10)} onDailyDrill={(family) => {
+  else if (screen === "home") body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={(s) => (s === "lobby" ? setScreen("lobby") : go(s))} streak={streak} streakDay={profile?.streak_day} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} sessionHandCount={daily.session ? 10 : Math.min((lastSession ? lastSession.stats.hands : 0), 10)} onDailyDrill={(family) => {
     const _drillToday = new Date().toISOString().slice(0, 10);
     const _dateSeed = (() => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); })();
     const list = family ? Array.from({ length: 10 }, (_, i) => genPuzzle(mulberry32(_dateSeed + i + 1337), family, 0.6)) : dailyPuzzles();
@@ -4304,6 +4943,7 @@ export default function App() {
     setPuzzleRun({ mode: "daily", list, idx: savedCount, results: prefilledResults });
     setScreen("puzzle");
   }} />;
+  else if (screen === "log") body = <LogScreen profile={profile} go={go} openModule={openModule} />;
   else if (screen === "lobby") body = <Lobby onStart={startSession} onPrivate={() => setScreen("mpsetup")} go={go} rating={rating} progress={progress} />;
   else if (screen === "play" && game) body = <PlayScreen game={game} setGame={setGame} equity={equity} onHeroAct={onHeroAct} onNextHand={nextHand} onEndSession={endSession} sessionHandCount={game.handNo} />;
   else if (screen === "review" && lastSession) body = <ReviewScreen session={lastSession} rating={rating} band={ratingBand(lifetime.hands)} go={go} lifetimeBuckets={bucketize(lifetimeRows)} openModule={openModule} openReplay={(h) => { setReplayHand(h); setReplayBackScreen("review"); setScreen("replay"); }} />;
@@ -4407,7 +5047,7 @@ export default function App() {
     setProfile((p) => ({ ...p, cosmetics: cos }));
     if (profile) dbUpdate("users", `id=eq.${profile.id}`, { cosmetics: cos });
   }} />;
-  else body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={go} streak={streak} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} sessionHandCount={daily.session ? 10 : Math.min((lastSession ? lastSession.stats.hands : 0), 10)} onDailyDrill={(family) => {
+  else body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={go} streak={streak} streakDay={profile?.streak_day} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} sessionHandCount={daily.session ? 10 : Math.min((lastSession ? lastSession.stats.hands : 0), 10)} onDailyDrill={(family) => {
     const _drillToday = new Date().toISOString().slice(0, 10);
     const _dateSeed = (() => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); })();
     const list = family ? Array.from({ length: 10 }, (_, i) => genPuzzle(mulberry32(_dateSeed + i + 1337), family, 0.6)) : dailyPuzzles();
