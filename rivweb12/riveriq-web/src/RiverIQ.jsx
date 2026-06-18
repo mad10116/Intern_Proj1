@@ -3334,8 +3334,19 @@ function MpTableScreen({ table, mySeat, profile, onLeft }) {
     setBusy(false);
   }
   async function leave() {
+    const handsPlayed = pub ? pub.handNo + 1 : 0;
     await tableCall("leave", table.id);
-    onLeft(pub ? pub.handNo + 1 : 0);
+    let analysis = null;
+    if (handsPlayed > 0) {
+      try {
+        const r = await sbFetch("/functions/v1/score-mp-session", {
+          method: "POST",
+          body: JSON.stringify({ table_id: table.id }),
+        });
+        if (r.ok) analysis = await r.json();
+      } catch {}
+    }
+    onLeft(handsPlayed, analysis);
   }
   const stalled = pub && pub.toAct >= 0 && pub.toAct !== mySeat && Date.now() - pub.turnStarted > 62000;
 
@@ -3442,7 +3453,14 @@ function MpTableScreen({ table, mySeat, profile, onLeft }) {
     </div>
   );
 }
-function MpReviewScreen({ tableId, go }) {
+function MpReviewScreen({ tableId, session, rating, band, go, openModule, openReplay }) {
+  // If the score-mp-session pipeline produced a full analysis, render it exactly
+  // like the solo ReviewScreen (identical layout, leaks, plan, replay buttons).
+  if (session) {
+    return <ReviewScreen session={session} rating={rating} band={band} go={go} openModule={openModule} openReplay={openReplay} />;
+  }
+
+  // Fallback: table-review legacy display (older sessions or function unavailable)
   const [data, setData] = useState(null);
   const [state, setState] = useState("loading");
   useEffect(() => {
@@ -3461,10 +3479,9 @@ function MpReviewScreen({ tableId, go }) {
       </div>
       <div style={{ fontSize: 12.5, color: T.mist, marginTop: 6, lineHeight: 1.5 }}>
         Your bets and bluffs, scored against how these specific players actually play. Their stats stay private, only the verdicts reach you.
-        Cards shown at showdown via host client. If cards weren't visible, the hand ended before all cards were shared.
       </div>
       {state === "loading" && <div style={{ color: T.faint, fontSize: 13, marginTop: 24, textAlign: "center" }}>Scoring your decisions…</div>}
-      {state === "error" && <div style={{ color: T.bad, fontSize: 13, marginTop: 24 }}>Couldn't load the review, is the table-review function deployed?</div>}
+      {state === "error" && <div style={{ color: T.bad, fontSize: 13, marginTop: 24 }}>Couldn't load the review.</div>}
       {data && data.summary && (
         <div style={{ background: T.baize2, border: "1px solid " + T.line, borderRadius: 14, padding: 18, marginTop: 12 }}>
           <div style={{ display: "flex", alignItems: "stretch" }}>
@@ -3770,6 +3787,8 @@ export default function App() {
   const [mpTable, setMpTable] = useState(null);
   const [mpSeat, setMpSeat] = useState(null);
   const [mpReviewId, setMpReviewId] = useState(null);
+  const [mpSessionAnalysis, setMpSessionAnalysis] = useState(null);
+  const [replayBackScreen, setReplayBackScreen] = useState("review");
   const [showHands, setShowHands] = useState(false);
   const [showRanges, setShowRanges] = useState(false);
   const [tendencies, setTendencies] = useState(null);
@@ -4287,8 +4306,8 @@ export default function App() {
   }} />;
   else if (screen === "lobby") body = <Lobby onStart={startSession} onPrivate={() => setScreen("mpsetup")} go={go} rating={rating} progress={progress} />;
   else if (screen === "play" && game) body = <PlayScreen game={game} setGame={setGame} equity={equity} onHeroAct={onHeroAct} onNextHand={nextHand} onEndSession={endSession} sessionHandCount={game.handNo} />;
-  else if (screen === "review" && lastSession) body = <ReviewScreen session={lastSession} rating={rating} band={ratingBand(lifetime.hands)} go={go} lifetimeBuckets={bucketize(lifetimeRows)} openModule={openModule} openReplay={(h) => { setReplayHand(h); setScreen("replay"); }} />;
-  else if (screen === "replay" && replayHand) body = <ReplayScreen hand={replayHand} back={() => setScreen("review")} />;
+  else if (screen === "review" && lastSession) body = <ReviewScreen session={lastSession} rating={rating} band={ratingBand(lifetime.hands)} go={go} lifetimeBuckets={bucketize(lifetimeRows)} openModule={openModule} openReplay={(h) => { setReplayHand(h); setReplayBackScreen("review"); setScreen("replay"); }} />;
+  else if (screen === "replay" && replayHand) body = <ReplayScreen hand={replayHand} back={() => setScreen(replayBackScreen)} />;
   else if (screen === "learn") body = <LearnScreen progress={progress} openModule={openModule} ratingHistory={ratingHistory} sessions={sessions} focusLeaks={lastSession ? lastSession.leaks : []} onTrainer={(levelName) => {
     const due = dueReviews(trainerRef.current);
     const fams = [...due, ...(lastSession ? lastSession.leaks.map((l) => familyOf(l.ruleId)) : [])];
@@ -4364,8 +4383,24 @@ export default function App() {
     }} />;
   else if (screen === "puzzlereview" && puzzleReview) body = <PuzzleReviewScreen run={puzzleReview} onDone={() => { setPuzzleReview(null); setScreen("home"); }} />;
   else if (screen === "mpsetup") body = <MpSetup back={() => setScreen("lobby")} onSeated={(t, seat) => { setMpTable(t); setMpSeat(seat); setScreen("mptable"); }} />;
-  else if (screen === "mptable" && mpTable) body = <MpTableScreen table={mpTable} mySeat={mpSeat} profile={profile || { id: null }} onLeft={(handsPlayed) => { if (handsPlayed > 0) { setMpReviewId(mpTable.id); setScreen("mpreview"); } else setScreen("lobby"); setMpTable(null); }} />;
-  else if (screen === "mpreview" && mpReviewId) body = <MpReviewScreen tableId={mpReviewId} go={go} />;
+  else if (screen === "mptable" && mpTable) body = <MpTableScreen table={mpTable} mySeat={mpSeat} profile={profile || { id: null }} onLeft={(handsPlayed, serverAnalysis) => {
+    if (handsPlayed > 0) {
+      let sess = null;
+      if (serverAnalysis?.hands?.length) {
+        try {
+          sess = analyzeSession(serverAnalysis.hands, { rating, sessionNumber: (sessions.length || 0) + 1 });
+          sess.ratingDelta = serverAnalysis.rating_delta ?? 0;
+          sess.allHands = serverAnalysis.hands;
+        } catch {}
+      }
+      setMpSessionAnalysis(sess);
+      setMpReviewId(mpTable.id);
+      setScreen("mpreview");
+      if (serverAnalysis?.new_rating) setRating(serverAnalysis.new_rating);
+    } else setScreen("lobby");
+    setMpTable(null);
+  }} />;
+  else if (screen === "mpreview" && mpReviewId) body = <MpReviewScreen tableId={mpReviewId} session={mpSessionAnalysis} rating={rating} band={ratingBand(lifetime.hands)} go={go} openModule={openModule} openReplay={(h) => { setReplayHand(h); setReplayBackScreen("mpreview"); setScreen("replay"); }} />;
   else if (screen === "profile") body = <ProfileScreen user={user} rating={rating} ratingHistory={ratingHistory} sessions={sessions} progress={progress} answers={answers} lifetime={lifetime} onSignOut={signOut} onDeleteAccount={handleDeleteAccount} tendencies={tendencies} cosmetics={profile ? profile.cosmetics : {}} trainer={trainerState} onCosmetic={(k, v) => {
     const cos = { ...((profile && profile.cosmetics) || {}), [k]: v };
     COSMETICS[k === "back" ? "back" : "felt"] = v || (k === "back" ? "classic" : null);
