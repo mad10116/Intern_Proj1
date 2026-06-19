@@ -28,6 +28,9 @@ const T = {
   bad: "#E0716B",
 };
 const SB = 10, BB = 20, START_STACK = 2000;
+const CARD_REVEAL_DELAY_MS = 350;
+const TIMER_GLOW_THRESHOLD_SECONDS = 10;
+const TIMER_DURATION_S = 22;
 // TESTING: unlock every solo tier and learn module so all levels can be exercised.
 // Set to false before a real launch to restore normal progression gating.
 const UNLOCK_ALL_FOR_TESTING = true;
@@ -60,6 +63,14 @@ const CSS = `
 @keyframes riqChipIn { from { opacity: 0; transform: translate(-50%, -8px) scale(.4); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
 @keyframes riqShimmer { 0%, 100% { opacity: .35; } 50% { opacity: .7; } }
 @keyframes riqCount { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes riqActionLabel { 0% { opacity:0; transform:translateY(-3px); } 10% { opacity:1; transform:translateY(0); } 85% { opacity:1; transform:translateY(0); } 100% { opacity:0; transform:translateY(0); } }
+@keyframes riqResultIn { 0% { opacity:0; transform:scale(.92); } 100% { opacity:1; transform:scale(1); } }
+@keyframes riqCardFlip { from { transform: perspective(600px) rotateY(90deg); opacity:.8; } to { transform: perspective(600px) rotateY(0deg); opacity:1; } }
+@keyframes riqTimerGlowLow  { 0%,100% { box-shadow:none; } 50% { box-shadow: 0 0 6px 2px rgba(255,140,0,.45); } }
+@keyframes riqTimerGlowMed  { 0%,100% { box-shadow:none; } 50% { box-shadow: 0 0 11px 3px rgba(255,80,0,.72); } }
+@keyframes riqTimerGlowHigh { 0%,100% { box-shadow:none; } 50% { box-shadow: 0 0 18px 5px rgba(255,30,0,.96); } }
+@keyframes riqBeckon { 0%,100% { box-shadow: 0 0 0 0 rgba(201,165,70,.55), inset 0 0 0 rgba(201,165,70,0); } 50% { box-shadow: 0 0 0 9px rgba(201,165,70,0), inset 0 0 12px rgba(201,165,70,.25); } }
+@keyframes riqMissed { 0%,100% { box-shadow: inset 0 0 3px rgba(194,69,62,.18); } 50% { box-shadow: inset 0 0 9px rgba(194,69,62,.5); } }
 @keyframes riqStamp { 0% { opacity: 0; transform: scale(1.6) rotate(-14deg); } 60% { opacity: 1; transform: scale(.92) rotate(-11deg); } 100% { transform: scale(1) rotate(-11deg); opacity: 1; } }
 .riq .deal { animation: riqDealIn .28s ease both; }
 .riq .fadeup { animation: riqFadeUp .35s ease both; }
@@ -1348,10 +1359,10 @@ const SEAT_POS = [
   { left: "93%", top: "28%" },
   { left: "91%", top: "68%" },
 ];
-function Seat({ p, idx, game, isHero, intro }) {
+function Seat({ p, idx, game, isHero, intro, actionLabel, showdownReady }) {
   const acting = game.toAct === idx && game.street !== "result";
   const isBtn = game.button === idx;
-  const showCards = isHero || (game.street === "result" && game.wentToShowdown && !p.folded);
+  const showCards = isHero || (game.street === "result" && game.wentToShowdown && !p.folded && showdownReady);
   const won = game.winners && game.winners.some((w) => w.idx === idx);
   return (
     <div style={{ position: "absolute", ...SEAT_POS[idx], transform: "translate(-50%,-50%)", textAlign: "center", opacity: p.folded ? 0.38 : 1, transition: "opacity .3s", zIndex: 5 }}>
@@ -1366,6 +1377,11 @@ function Seat({ p, idx, game, isHero, intro }) {
         ))}
       </div>
       <div style={{ background: won ? "rgba(201,165,70,.18)" : "rgba(7,16,11,.88)", border: `1.5px solid ${acting ? T.brass : won ? T.brass : T.line}`, borderRadius: 10, padding: "4px 9px", minWidth: 76, animation: acting ? "riqPulse 1.4s infinite" : "none", position: "relative" }}>
+        {actionLabel && (
+          <div key={actionLabel.key} style={{ position: "absolute", top: -22, left: 0, right: 0, display: "flex", justifyContent: "center", pointerEvents: "none", zIndex: 10 }}>
+            <span className="mono" style={{ background: "rgba(20,17,15,0.97)", border: `1px solid ${T.line}`, borderRadius: 99, padding: "2px 8px", fontSize: 10, fontWeight: 600, color: T.card, whiteSpace: "nowrap", lineHeight: "16px", animation: "riqActionLabel 2s ease forwards" }}>{actionLabel.text}</span>
+          </div>
+        )}
         <div style={{ fontSize: 11, fontWeight: 700, color: won ? T.brass : T.card }}>{p.name}{isBtn && <span style={{ color: T.brass }}> ⓓ</span>}</div>
         <div className="mono" style={{ fontSize: 11.5, color: p.allIn ? T.cordovan : T.mist }}>{p.allIn ? "ALL-IN" : p.stack.toLocaleString()}</div>
       </div>
@@ -1407,6 +1423,8 @@ function PlayScreen({ game, setGame, equity, onHeroAct, onNextHand, onEndSession
   useEffect(() => { setRaiseTo(Math.min(Math.max(minRaiseTo, game.currentBet * 2 || BB * 3), maxRaiseTo)); }, [game.handNo, game.street, game.currentBet]); // eslint-disable-line
   const pot = potTotal(game);
   const result = game.street === "result";
+
+  // All-in runout reveal (unchanged)
   const [revealedBoardCount, setRevealedBoardCount] = useState(null);
   useEffect(() => {
     if (game.street === "result" && game.wentToShowdown && game.allInRevealFrom != null && game.allInRevealFrom < game.board.length) {
@@ -1419,6 +1437,67 @@ function PlayScreen({ game, setGame, equity, onHeroAct, onNextHand, onEndSession
     }
     setRevealedBoardCount(null);
   }, [game.handNo, game.street]); // eslint-disable-line
+
+  // Showdown delay
+  const [showdownReady, setShowdownReady] = useState(false);
+  useEffect(() => {
+    if (game.street === "result" && game.wentToShowdown) {
+      const t = setTimeout(() => setShowdownReady(true), 1000);
+      return () => clearTimeout(t);
+    }
+    setShowdownReady(false);
+  }, [game.street, game.handNo]); // eslint-disable-line
+
+  // Staggered card flip reveal per street
+  const [boardRevealCount, setBoardRevealCount] = useState(0);
+  const boardRevealRef = useRef(0);
+  useEffect(() => { boardRevealRef.current = 0; setBoardRevealCount(0); }, [game.handNo]); // eslint-disable-line
+  useEffect(() => {
+    if (game.board.length === 0) return;
+    const from = boardRevealRef.current;
+    if (from >= game.board.length) return;
+    const timers = [];
+    for (let i = from; i < game.board.length; i++) {
+      timers.push(setTimeout(() => { boardRevealRef.current = i + 1; setBoardRevealCount(i + 1); }, (i - from) * CARD_REVEAL_DELAY_MS));
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [game.board.length, game.handNo]); // eslint-disable-line
+
+  // Floating action labels per seat
+  const [actionLabels, setActionLabels] = useState({});
+  const actionLogRef = useRef({ len: 0, handNo: game.handNo });
+  useEffect(() => {
+    const prev = actionLogRef.current;
+    if (game.handNo !== prev.handNo) { actionLogRef.current = { len: 0, handNo: game.handNo }; setActionLabels({}); return; }
+    const newEntries = game.log.slice(prev.len);
+    if (!newEntries.length) return;
+    actionLogRef.current = { len: game.log.length, handNo: game.handNo };
+    newEntries.forEach((entry) => {
+      let text;
+      if (entry.type === "fold") text = "Fold";
+      else if (entry.type === "check") text = "Check";
+      else if (entry.type === "call") text = "Call";
+      else if (entry.type === "raise") text = entry.toCall === 0 ? `Bet ${(entry.amount || 0).toLocaleString()}` : `Raises ${(entry.amount || 0).toLocaleString()}`;
+      if (!text) return;
+      const labelKey = Date.now() + "-" + entry.idx;
+      setActionLabels((a) => ({ ...a, [entry.idx]: { text, key: labelKey } }));
+      setTimeout(() => setActionLabels((a) => { if (!a[entry.idx] || a[entry.idx].key !== labelKey) return a; const next = { ...a }; delete next[entry.idx]; return next; }), 2100);
+    });
+  }, [game.log.length, game.handNo]); // eslint-disable-line
+
+  // Countdown timer with escalating glow
+  const [timerSecs, setTimerSecs] = useState(TIMER_DURATION_S);
+  useEffect(() => {
+    if (!heroTurn) { setTimerSecs(TIMER_DURATION_S); return; }
+    setTimerSecs(TIMER_DURATION_S);
+    const iv = setInterval(() => setTimerSecs((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(iv);
+  }, [heroTurn, game.log.length, game.handNo]); // eslint-disable-line
+  const timerBarColor = timerSecs > TIMER_GLOW_THRESHOLD_SECONDS ? T.brass : timerSecs > 5 ? "#D97B20" : "#C94030";
+  const timerGlowAnim = timerSecs <= TIMER_GLOW_THRESHOLD_SECONDS
+    ? `${timerSecs <= 3 ? "riqTimerGlowHigh" : timerSecs <= 6 ? "riqTimerGlowMed" : "riqTimerGlowLow"} 1s ease-in-out infinite`
+    : "none";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "12px 12px 0" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -1438,53 +1517,59 @@ function PlayScreen({ game, setGame, equity, onHeroAct, onNextHand, onEndSession
         <div style={{ position: "absolute", left: "50%", top: "44%", transform: "translate(-50%,-50%)", textAlign: "center", zIndex: 4 }}>
           <div style={{ display: "flex", gap: 5, justifyContent: "center" }}>
             {[0, 1, 2, 3, 4].map((i) => {
-              const revealed = revealedBoardCount === null || i < revealedBoardCount;
-              return game.board[i] && revealed
-                ? <PlayingCard key={i} card={game.board[i]} w={40} deal />
-                : game.board[i]
-                  ? <div key={i} style={{ width: 40, height: 57, borderRadius: 6, background: "rgba(201,165,70,.08)", border: "1.5px solid rgba(201,165,70,.35)", animation: "riqPulse 0.8s ease-in-out infinite" }} />
-                  : <div key={i} style={{ width: 40, height: 57, borderRadius: 6, border: "1.5px dashed rgba(201,165,70,.25)" }} />;
+              if (revealedBoardCount !== null) {
+                return game.board[i] && i < revealedBoardCount
+                  ? <PlayingCard key={i} card={game.board[i]} w={40} deal />
+                  : game.board[i]
+                    ? <div key={i} style={{ width: 40, height: 57, borderRadius: 6, background: "rgba(201,165,70,.08)", border: "1.5px solid rgba(201,165,70,.35)", animation: "riqPulse 0.8s ease-in-out infinite" }} />
+                    : <div key={i} style={{ width: 40, height: 57, borderRadius: 6, border: "1.5px dashed rgba(201,165,70,.25)" }} />;
+              }
+              if (!game.board[i]) return <div key={i} style={{ width: 40, height: 57, borderRadius: 6, border: "1.5px dashed rgba(201,165,70,.25)" }} />;
+              if (i >= boardRevealCount) return <PlayingCard key={`${i}d`} hidden w={40} />;
+              return <div key={`${i}u`} style={{ animation: "riqCardFlip .28s ease both" }}><PlayingCard card={game.board[i]} w={40} /></div>;
             })}
           </div>
           <div className="mono" style={{ marginTop: 8, fontSize: 14, color: T.brass, fontWeight: 600 }}>
             <span style={{ fontSize: 10, color: T.faint, letterSpacing: ".1em" }}>POT </span>{pot.toLocaleString()}
           </div>
         </div>
-        {game.players.map((p, i) => <Seat key={i} p={p} idx={i} game={game} isHero={i === 0} />)}
+        {game.players.map((p, i) => <Seat key={i} p={p} idx={i} game={game} isHero={i === 0} actionLabel={actionLabels[i] || null} showdownReady={showdownReady} />)}
         {/* result overlay */}
-        {result && (
-          <div className="fadeup" style={{ position: "absolute", left: "50%", top: "44%", transform: "translate(-50%,-50%)", background: "rgba(7,16,11,.95)", border: "1.5px solid " + T.brass, borderRadius: 16, padding: "16px 22px", textAlign: "center", zIndex: 20, minWidth: 230 }}>
-            {game.wentToShowdown && game.players.filter((p, i) => i !== 0 && !p.folded).length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
-                {game.players.filter((p, i) => i !== 0 && !p.folded).map((p, pi) => (
-                  <div key={pi} style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ fontSize: 10, color: T.mist, marginRight: 4 }}>{p.name}</span>
-                    {p.cards && p.cards.map((c, k) => <PlayingCard key={k} card={c} w={28} />)}
-                  </div>
-                ))}
-              </div>
-            )}
-            {game.winners.map((w) => (
-              <div key={w.idx} style={{ marginBottom: 6 }}>
-                <span className="serif" style={{ fontSize: 19, color: T.brass }}>{game.players[w.idx].name}</span>
-                <span className="mono" style={{ color: T.good, marginLeft: 8, fontSize: 15 }}>+{w.amt.toLocaleString()}</span>
-                {w.score != null && <div style={{ fontSize: 12, color: T.mist, marginTop: 2 }}>{CAT_NAMES[scoreCat(w.score)]}</div>}
-              </div>
-            ))}
-            {!game.wentToShowdown && <div style={{ fontSize: 11.5, color: T.faint }}>everyone folded</div>}
-            <Btn kind="primary" onClick={() => { haptic("light"); onNextHand(); }} style={{ marginTop: 10, width: "100%" }}>Next hand</Btn>
+        {(result && (!game.wentToShowdown || showdownReady)) && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 20 }}>
+            <div style={{ background: "rgba(7,16,11,.97)", border: "1.5px solid " + T.brass, borderRadius: 16, padding: "16px 22px", textAlign: "center", minWidth: 230, animation: "riqResultIn .2s ease forwards" }}>
+              {game.wentToShowdown && game.players.filter((p, i) => i !== 0 && !p.folded).length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+                  {game.players.filter((p, i) => i !== 0 && !p.folded).map((p, pi) => (
+                    <div key={pi} style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ fontSize: 10, color: T.mist, marginRight: 4 }}>{p.name}</span>
+                      {p.cards && p.cards.map((c, k) => <PlayingCard key={k} card={c} w={28} />)}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {game.winners.map((w) => (
+                <div key={w.idx} style={{ marginBottom: 6 }}>
+                  <span className="serif" style={{ fontSize: 19, color: T.brass }}>{game.players[w.idx].name}</span>
+                  <span className="mono" style={{ color: T.good, marginLeft: 8, fontSize: 15 }}>+{w.amt.toLocaleString()}</span>
+                  {w.score != null && <div style={{ fontSize: 12, color: T.mist, marginTop: 2 }}>{CAT_NAMES[scoreCat(w.score)]}</div>}
+                </div>
+              ))}
+              {!game.wentToShowdown && <div style={{ fontSize: 11.5, color: T.faint }}>everyone folded</div>}
+              <Btn kind="primary" onClick={() => { haptic("light"); onNextHand(); }} style={{ marginTop: 10, width: "100%" }}>Next hand</Btn>
+            </div>
           </div>
         )}
       </div>
 
       <StrengthStrip hero={hero.cards} board={game.board} equity={equity} />
 
-      {/* Action bar, bottom padding keeps the slider above the nav */}
+      {/* Action bar */}
       <div style={{ padding: "10px 0 86px", minHeight: 118 }}>
         {heroTurn ? (
           <>
-            <div style={{ height: 3, borderRadius: 2, background: "#0A1812", marginBottom: 10, overflow: "hidden" }}>
-              <div key={game.log.length} style={{ height: "100%", background: T.brass, animation: "riqTimer 22s linear forwards" }} />
+            <div style={{ height: 3, borderRadius: 2, background: T.rail, marginBottom: 10, overflow: "hidden", animation: timerGlowAnim }}>
+              <div key={game.log.length} style={{ height: "100%", background: timerBarColor, animation: `riqTimer ${TIMER_DURATION_S}s linear forwards`, transition: "background .5s" }} />
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
               <Btn kind="ghost" onClick={() => onHeroAct({ type: "fold" })} style={{ flex: "0 0 auto", padding: "12px 16px", color: T.faint, fontWeight: 500, fontSize: 14 }}>Fold</Btn>
@@ -2561,7 +2646,159 @@ function StreakCard({ streak, streakDay, daily, trainerState }) {
   );
 }
 
-function HomeScreen({ user, sessions, lifetime, rating, go, streak, streakDay, daily, onDailyDrill, trainerState, ratingHistory, onOpenHands, sessionHandCount = 0 }) {
+function ActivityGrid({ profile, go, daily, sessionHandCount }) {
+  const [drillDates, setDrillDates] = useState(null);
+  const [playDates, setPlayDates] = useState(null);
+
+  const now = new Date();
+  const year = now.getFullYear(), month = now.getMonth(), todayNum = now.getDate();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const ds = (d) => `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+
+  useEffect(() => {
+    const dDates = new Set();
+    for (let d = 1; d <= daysInMonth; d++) {
+      if (localStorage.getItem(`riq_daily_drill_${ds(d)}`) === "true") dDates.add(ds(d));
+    }
+    setDrillDates(dDates);
+
+    if (!profile) return;
+    (async () => {
+      const monthISO = `${year}-${String(month + 1).padStart(2, "0")}`;
+      const rows = await dbSelect("sessions", `user_id=eq.${profile.id}&hands_played=gt.0&select=started_at,hands_played&started_at=gte.${monthISO}-01T00:00:00`);
+      const byDate = {};
+      (rows || []).forEach((r) => {
+        const d = new Date(r.started_at);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        byDate[key] = (byDate[key] || 0) + (r.hands_played || 0);
+      });
+      setPlayDates(new Set(Object.entries(byDate).filter(([, h]) => h >= 10).map(([k]) => k)));
+    })();
+  }, [profile && profile.id]); // eslint-disable-line
+
+  const loaded = drillDates !== null && playDates !== null;
+
+  let fullStreak = 0;
+  if (loaded) {
+    const todayFull = drillDates.has(ds(todayNum)) && playDates.has(ds(todayNum));
+    for (let d = todayFull ? todayNum : todayNum - 1; d >= 1; d--) {
+      if (drillDates.has(ds(d)) && playDates.has(ds(d))) fullStreak++;
+      else break;
+    }
+  }
+
+  const todayKey = ds(todayNum);
+  const todayDrill = (drillDates?.has(todayKey)) || (daily?.drill ?? false);
+  const todayPlay = playDates?.has(todayKey) ?? false;
+  const todayHandsCount = todayPlay ? 10 : Math.min(sessionHandCount || 0, 10);
+  const todayFull = todayDrill && todayPlay;
+
+  let fullDays = 0;
+  if (loaded) {
+    for (let d = 1; d <= Math.min(todayNum, daysInMonth); d++) {
+      if (drillDates.has(ds(d)) && playDates.has(ds(d))) fullDays++;
+    }
+  }
+
+  const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
+  const totalCells = Math.ceil((firstDow + daysInMonth) / 7) * 7;
+  const cells = Array.from({ length: totalCells }, (_, i) => i - firstDow + 1);
+  const monthName = now.toLocaleString("en-US", { month: "long" });
+
+  const DULL = T.brassDim;
+  const VOID = "rgba(194,69,62,0.14)";
+
+  return (
+    <div className="gp" style={{ marginTop: 14, marginBottom: 4, background: T.baize2, border: `1px solid ${T.line}`, borderRadius: 14, padding: "14px 16px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <span className="mono" style={{ fontSize: 10, color: T.mist, letterSpacing: ".1em", textTransform: "uppercase" }}>{monthName} {year}</span>
+        <span style={{ fontSize: 12, color: fullStreak > 0 ? T.brass : T.faint }}>
+          {fullStreak > 0
+            ? <>{fullStreak} day streak 🔥</>
+            : <span style={{ fontSize: 11 }}>Complete both today</span>}
+        </span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 4 }}>
+        {["M","T","W","T","F","S","S"].map((d, i) => (
+          <div key={i} style={{ textAlign: "center", fontSize: 9, color: T.faint, fontWeight: 600 }}>{d}</div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+        {cells.map((day, i) => {
+          if (day < 1 || day > daysInMonth) return <div key={i} style={{ aspectRatio: "1" }} />;
+          const isTodayCell = day === todayNum;
+          const isPast = day < todayNum;
+          const isFuture = day > todayNum;
+          const hasDrill = loaded && drillDates.has(ds(day));
+          const hasPlay = loaded && playDates.has(ds(day));
+          const both = hasDrill && hasPlay;
+
+          let s = { aspectRatio: "1", borderRadius: 5, boxSizing: "border-box", cursor: "default" };
+          let onClick;
+
+          if (isFuture) {
+            s.border = "1px solid rgba(201,165,70,0.08)";
+          } else if (isTodayCell) {
+            if (both) {
+              s.background = T.brass;
+              s.boxShadow = "0 0 10px 3px rgba(201,165,70,0.5), inset 0 1px 0 rgba(255,255,255,0.22)";
+            } else if (hasDrill) {
+              s.background = `linear-gradient(135deg, ${DULL} 50%, rgba(201,165,70,0.10) 50%)`;
+              s.border = `1.5px solid ${T.brass}`;
+              s.animation = "riqBeckon 2s ease-in-out infinite";
+            } else if (hasPlay) {
+              s.background = `linear-gradient(135deg, rgba(201,165,70,0.10) 50%, ${DULL} 50%)`;
+              s.border = `1.5px solid ${T.brass}`;
+              s.animation = "riqBeckon 2s ease-in-out infinite";
+            } else {
+              s.background = "rgba(201,165,70,0.08)";
+              s.border = `1.5px solid ${T.brass}`;
+              s.animation = "riqBeckon 2s ease-in-out infinite";
+            }
+          } else if (isPast) {
+            if (both) {
+              s.background = T.brass;
+              s.boxShadow = "0 0 8px 2px rgba(201,165,70,0.45), inset 0 1px 0 rgba(255,255,255,0.22)";
+              s.cursor = "pointer";
+              onClick = () => { localStorage.setItem("riq_log_jump", ds(day)); go("log"); };
+            } else if (hasDrill && !hasPlay) {
+              s.background = `linear-gradient(135deg, ${DULL} 50%, ${VOID} 50%)`;
+              s.border = "1px solid rgba(194,69,62,0.22)";
+              s.animation = "riqMissed 3.2s ease-in-out infinite";
+            } else if (hasPlay && !hasDrill) {
+              s.background = `linear-gradient(135deg, ${VOID} 50%, ${DULL} 50%)`;
+              s.border = "1px solid rgba(194,69,62,0.22)";
+              s.animation = "riqMissed 3.2s ease-in-out infinite";
+            } else {
+              s.background = VOID;
+              s.border = "1px solid rgba(194,69,62,0.3)";
+              s.animation = "riqMissed 3.2s ease-in-out infinite";
+            }
+          }
+
+          return <div key={i} onClick={onClick} style={s} />;
+        })}
+      </div>
+
+      <div style={{ marginTop: 10, fontSize: 11, color: T.faint, lineHeight: 1.6 }}>
+        {loaded ? (
+          <>
+            <span>{fullDays} full {fullDays === 1 ? "day" : "days"} this month</span>
+            {!todayFull && (
+              <span style={{ marginLeft: 8, color: T.mist }}>
+                {todayDrill ? "Drill ✓" : "Drill —"}{" · "}{todayPlay ? "Play ✓" : `Play ${todayHandsCount}/10`}
+              </span>
+            )}
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function HomeScreen({ user, sessions, lifetime, rating, go, streak, streakDay, daily, onDailyDrill, trainerState, ratingHistory, onOpenHands, sessionHandCount = 0, profile }) {
   const last = sessions[sessions.length - 1];
   const lastDelta = last ? last.ratingDelta : null;
   const hr = new Date().getHours();
@@ -2617,6 +2854,7 @@ function HomeScreen({ user, sessions, lifetime, rating, go, streak, streakDay, d
       </Btn>
 
       <StreakCard streak={streak} streakDay={streakDay} daily={daily} trainerState={trainerState} />
+      <ActivityGrid profile={profile} go={go} daily={daily} sessionHandCount={sessionHandCount} />
 
       <SectionTitle>Daily</SectionTitle>
       <div style={{ display: "flex", gap: 7, marginBottom: 10 }}>
@@ -4168,6 +4406,15 @@ function LogScreen({ profile, go, openModule }) {
   const [filter, setFilter] = useState("all"); // "all" | "win" | "loss"
 
   useEffect(() => {
+    const jump = localStorage.getItem("riq_log_jump");
+    if (jump) {
+      localStorage.removeItem("riq_log_jump");
+      const d = new Date(jump + "T12:00:00");
+      setQuery(d.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
+    }
+  }, []);
+
+  useEffect(() => {
     if (!profile) return;
     (async () => {
       const rows = await dbSelect("sessions", `user_id=eq.${profile.id}&select=id,started_at,ended_at,hands_played,net_chips,name,analysis_json&order=started_at.desc&limit=60`);
@@ -4178,9 +4425,14 @@ function LogScreen({ profile, go, openModule }) {
   async function expandSession(sess) {
     if (expandedId === sess.id) { setExpandedId(null); return; }
     setExpandedId(sess.id);
-    if (handsMap[sess.id]) return;
-    const hands = await dbSelect("hands", `session_id=eq.${sess.id}&select=id,hand_number,hero_cards,board_cards,result_chips,street_reached,actions(street,action_type,is_optimal,ev_loss)&order=hand_number.asc`);
-    setHandsMap((m) => ({ ...m, [sess.id]: hands || [] }));
+    if (handsMap[sess.id] !== undefined && handsMap[sess.id] !== null) return;
+    const q = `session_id=eq.${sess.id}&select=id,hand_number,hero_cards,board_cards,result_chips,street_reached,actions(street,action_type,is_optimal,ev_loss)&order=hand_number.asc`;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
+      const rows = await dbSelect("hands", q);
+      if (rows && rows.length > 0) { setHandsMap((m) => ({ ...m, [sess.id]: rows })); return; }
+    }
+    setHandsMap((m) => ({ ...m, [sess.id]: null }));
   }
 
   async function saveSessionName(id, name) {
@@ -4300,9 +4552,11 @@ function LogScreen({ profile, go, openModule }) {
 
             {/* Expanded panel */}
             {isExpanded && (
-              <div className="fadeup" style={{ background: "#0A1812", border: `1px solid ${T.brass}`, borderTop: "none", borderRadius: "0 0 12px 12px", padding: "14px 16px" }}>
-                {!hands ? (
+              <div className="fadeup" style={{ background: T.baize2, border: `1px solid ${T.brass}`, borderTop: "none", borderRadius: "0 0 12px 12px", padding: "14px 16px" }}>
+                {hands === undefined ? (
                   <div style={{ color: T.faint, fontSize: 12, textAlign: "center", padding: "12px 0" }}>Loading…</div>
+                ) : hands === null ? (
+                  <div style={{ color: T.faint, fontSize: 12, textAlign: "center", padding: "12px 0" }}>No hand data found for this session.</div>
                 ) : (
                   <>
                     {/* Chip trajectory — only when we have hand data */}
@@ -4311,7 +4565,7 @@ function LogScreen({ profile, go, openModule }) {
                     {/* Coach note from analysis */}
                     {analysis && analysis.plan && (
                       <div style={{ fontSize: 13, color: "#D8E2DA", lineHeight: 1.6, marginBottom: 14, padding: "10px 12px", background: "rgba(201,165,70,.06)", borderRadius: 9, border: "1px solid " + T.line, borderLeft: `3px solid ${T.brass}` }}>
-                        {analysis.plan.split(".")[0]}.
+                        {Array.isArray(analysis.plan) ? analysis.plan[0]?.goal : analysis.plan.split(".")[0] + "."}
                       </div>
                     )}
 
@@ -4927,7 +5181,7 @@ export default function App() {
 
   let body;
   if (!user) body = <AuthScreen onAuthed={handleAuthed} pendingJoin={pendingJoin} />;
-  else if (screen === "home") body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={(s) => (s === "lobby" ? setScreen("lobby") : go(s))} streak={streak} streakDay={profile?.streak_day} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} sessionHandCount={daily.session ? 10 : Math.min((lastSession ? lastSession.stats.hands : 0), 10)} onDailyDrill={(family) => {
+  else if (screen === "home") body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={(s) => (s === "lobby" ? setScreen("lobby") : go(s))} streak={streak} streakDay={profile?.streak_day} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} sessionHandCount={daily.session ? 10 : Math.min((lastSession ? lastSession.stats.hands : 0), 10)} profile={profile} onDailyDrill={(family) => {
     const _drillToday = new Date().toISOString().slice(0, 10);
     const _dateSeed = (() => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); })();
     const list = family ? Array.from({ length: 10 }, (_, i) => genPuzzle(mulberry32(_dateSeed + i + 1337), family, 0.6)) : dailyPuzzles();
@@ -5047,7 +5301,7 @@ export default function App() {
     setProfile((p) => ({ ...p, cosmetics: cos }));
     if (profile) dbUpdate("users", `id=eq.${profile.id}`, { cosmetics: cos });
   }} />;
-  else body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={go} streak={streak} streakDay={profile?.streak_day} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} sessionHandCount={daily.session ? 10 : Math.min((lastSession ? lastSession.stats.hands : 0), 10)} onDailyDrill={(family) => {
+  else body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={go} streak={streak} streakDay={profile?.streak_day} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} sessionHandCount={daily.session ? 10 : Math.min((lastSession ? lastSession.stats.hands : 0), 10)} profile={profile} onDailyDrill={(family) => {
     const _drillToday = new Date().toISOString().slice(0, 10);
     const _dateSeed = (() => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); })();
     const list = family ? Array.from({ length: 10 }, (_, i) => genPuzzle(mulberry32(_dateSeed + i + 1337), family, 0.6)) : dailyPuzzles();
