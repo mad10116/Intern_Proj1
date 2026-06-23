@@ -1332,20 +1332,22 @@ function NavBar({ screen, go }) {
     { id: "profile", label: "Profile", glyph: "♥" },
   ];
   return (
-    <nav style={{ position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", background: "rgba(8,18,13,.96)", borderTop: "1px solid " + T.line, backdropFilter: "blur(8px)", zIndex: 30, paddingBottom: "env(safe-area-inset-bottom)" }}>
-      {items.map((it) => {
-        const playScreens = ["play", "lobby", "review", "replay", "mpsetup", "mptable", "puzzle", "puzzlereview", "mpreview"];
-        const learnScreens = ["learn", "module"];
-        const on = it.id === "play" ? playScreens.includes(screen) : it.id === "learn" ? learnScreens.includes(screen) : screen === it.id;
-        const red = it.glyph === "♥" || it.glyph === "♦";
-        const glyphColor = on ? (red ? T.cordovan : T.brass) : (red ? "rgba(224,113,107,.7)" : "rgba(201,165,70,.72)");
-        return (
-          <button key={it.id} onClick={() => go(it.id)} aria-label={it.label} style={{ flex: 1, padding: "10px 0 4px", background: "none", border: "none", color: on ? (red ? T.cordovan : T.brass) : T.mist }}>
-            <div style={{ fontSize: it.glyph === "◈" ? 16 : 20, lineHeight: 1, color: glyphColor }}>{it.glyph}</div>
-            <div style={{ fontSize: 10, marginTop: 3, letterSpacing: ".05em", textTransform: "uppercase", fontWeight: on ? 700 : 500, color: on ? (red ? T.cordovan : T.brass) : T.mist }}>{it.label}</div>
-          </button>
-        );
-      })}
+    <nav style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(8,18,13,.96)", borderTop: "1px solid " + T.line, backdropFilter: "blur(8px)", zIndex: 30, paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <div style={{ display: "flex", height: 49 }}>
+        {items.map((it) => {
+          const playScreens = ["play", "lobby", "review", "replay", "mpsetup", "mptable", "puzzle", "puzzlereview", "mpreview"];
+          const learnScreens = ["learn", "module"];
+          const on = it.id === "play" ? playScreens.includes(screen) : it.id === "learn" ? learnScreens.includes(screen) : screen === it.id;
+          const red = it.glyph === "♥" || it.glyph === "♦";
+          const glyphColor = on ? (red ? T.cordovan : T.brass) : (red ? "rgba(224,113,107,.7)" : "rgba(201,165,70,.72)");
+          return (
+            <button key={it.id} onClick={() => go(it.id)} aria-label={it.label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, background: "none", border: "none", color: on ? (red ? T.cordovan : T.brass) : T.mist, padding: 0 }}>
+              <div style={{ fontSize: it.glyph === "◈" ? 16 : 20, lineHeight: 1, color: glyphColor }}>{it.glyph}</div>
+              <div style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", fontWeight: on ? 700 : 500, color: on ? (red ? T.cordovan : T.brass) : T.mist }}>{it.label}</div>
+            </button>
+          );
+        })}
+      </div>
     </nav>
   );
 }
