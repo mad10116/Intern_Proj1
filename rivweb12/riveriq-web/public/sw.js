@@ -1,6 +1,6 @@
 // RiverIQ service worker — caches the app shell for instant loads and offline resilience.
 // Live data (Supabase calls) always hits the network; only static assets are cached.
-const CACHE = "riveriq-v2";
+const CACHE = "riveriq-v3";
 const SHELL = ["/", "/index.html", "/manifest.json", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {

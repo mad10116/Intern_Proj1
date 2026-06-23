@@ -1332,7 +1332,7 @@ function NavBar({ screen, go }) {
     { id: "profile", label: "Profile", glyph: "♥" },
   ];
   return (
-    <nav style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(8,18,13,.96)", borderTop: "1px solid " + T.line, backdropFilter: "blur(8px)", zIndex: 30, paddingBottom: "env(safe-area-inset-bottom)" }}>
+    <nav style={{ position: "fixed", bottom: 0, left: "max(0px, calc(50% - 220px))", right: "max(0px, calc(50% - 220px))", background: "rgba(8,18,13,.96)", borderTop: "1px solid " + T.line, backdropFilter: "blur(8px)", zIndex: 30, paddingBottom: "env(safe-area-inset-bottom)" }}>
       <div style={{ display: "flex", height: 52 }}>
         {items.map((it) => {
           const playScreens = ["play", "lobby", "review", "replay", "mpsetup", "mptable", "puzzle", "puzzlereview", "mpreview"];
