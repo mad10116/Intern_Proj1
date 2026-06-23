@@ -14,16 +14,16 @@ function haptic(style) {
 /* ============================ THEME ============================ */
 const T = {
   baize: "#0C1F16",      // deep felt
-  baize2: "#123127",     // raised felt
-  rail: "#1B3A2D",
+  baize2: "rgba(10,26,18,0.65)",  // green glass container
+  rail: "rgba(18,58,45,0.42)",    // translucent green rail
   card: "#F7F2E6",       // cream card stock
   ink: "#17211B",
   cordovan: "#C2453E",   // chip red / hearts & diamonds
   brass: "#C9A546",      // premium brass
   brassDim: "#8A7332",
   mist: "#9AB3A4",       // muted text
-  faint: "#5E7A6B",
-  line: "rgba(201,165,70,0.22)",
+  faint: "rgba(94,122,107,0.55)",
+  line: "rgba(201,165,70,0.14)",
   good: "#7FC97F",
   bad: "#E0716B",
 };
@@ -72,23 +72,35 @@ const CSS = `
 @keyframes riqBeckon { 0%,100% { box-shadow: 0 0 0 0 rgba(201,165,70,.55), inset 0 0 0 rgba(201,165,70,0); } 50% { box-shadow: 0 0 0 9px rgba(201,165,70,0), inset 0 0 12px rgba(201,165,70,.25); } }
 @keyframes riqMissed { 0%,100% { box-shadow: inset 0 0 3px rgba(194,69,62,.18); } 50% { box-shadow: inset 0 0 9px rgba(194,69,62,.5); } }
 @keyframes riqStamp { 0% { opacity: 0; transform: scale(1.6) rotate(-14deg); } 60% { opacity: 1; transform: scale(.92) rotate(-11deg); } 100% { transform: scale(1) rotate(-11deg); opacity: 1; } }
+@keyframes riqScreenIn { 0% { opacity: 0; filter: blur(8px); transform: translateY(20px); } 100% { opacity: 1; filter: blur(0); transform: none; } }
+@keyframes riqBgDrift0 { 0%,100% { transform: translate(0%,0%); } 25% { transform: translate(4%,-9%); } 60% { transform: translate(-5%,6%); } 80% { transform: translate(3%,-4%); } }
+@keyframes riqBgDrift1 { 0%,100% { transform: translate(0%,0%); } 30% { transform: translate(-6%,7%); } 55% { transform: translate(5%,-5%); } 80% { transform: translate(-3%,3%); } }
+@keyframes riqBgDrift2 { 0%,100% { transform: translate(0%,0%); } 20% { transform: translate(5%,4%); } 50% { transform: translate(-4%,-7%); } 75% { transform: translate(3%,6%); } }
+@keyframes riqFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-16px); } }
 .riq .deal { animation: riqDealIn .28s ease both; }
 .riq .fadeup { animation: riqFadeUp .35s ease both; }
+.riq .screen-in { animation: riqScreenIn 0.52s cubic-bezier(0.16,1,0.3,1) both; }
+.riq ::-webkit-scrollbar { display: none; }
+.riq * { scrollbar-width: none; }
 /* felt grain: a faint repeating weave so the table never reads as a flat gradient */
 .riq .felt-grain { position: relative; }
 .riq .felt-grain::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
   background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.014) 0 1px, transparent 1px 3px), repeating-linear-gradient(-45deg, rgba(0,0,0,.04) 0 1px, transparent 1px 3px);
   mix-blend-mode: overlay; }
+/* ── Green Glass panel utility ── */
+.riq .gp { backdrop-filter: blur(22px) saturate(160%); -webkit-backdrop-filter: blur(22px) saturate(160%); box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.32), inset 0 1px 0 rgba(201,165,70,0.07); }
+/* Ambient green orbs */
+.riq .orb { position: absolute; border-radius: 50%; pointer-events: none; filter: blur(72px); z-index: 0; }
 @media (prefers-reduced-motion: reduce) { .riq * { animation: none !important; transition: none !important; } }
 /* Responsive shell: phone fills edge-to-edge; laptop/desktop centers a framed table with ambient felt around it. */
 @media (min-width: 480px) {
-  .riq .app-shell { height: min(100dvh, 920px) !important; border-radius: 20px; border: 1px solid rgba(201,165,70,.18); box-shadow: 0 30px 80px rgba(0,0,0,.65), 0 0 0 1px rgba(0,0,0,.4); }
+  .riq .app-shell { height: min(100dvh, 920px) !important; border-radius: 20px; border: 1px solid rgba(201,165,70,.14); box-shadow: 0 30px 80px rgba(0,0,0,.7), 0 0 0 1px rgba(0,0,0,.5); }
   .riq .app-root { padding: 24px; }
 }
 @media (min-width: 480px) and (max-height: 940px) {
   .riq .app-root { align-items: center; }
 }
-.riq input[type=range] { -webkit-appearance:none; width:100%; height:4px; border-radius:2px; background:#2A4A3A; }
+.riq input[type=range] { -webkit-appearance:none; width:100%; height:4px; border-radius:2px; background:rgba(201,165,70,0.1); }
 .riq input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:20px; height:20px; border-radius:50%; background:${"#C9A546"}; border:2px solid #0C1F16; }
 `;
 
@@ -1206,9 +1218,9 @@ function PlayingCard({ card, hidden, w = 38, deal }) {
   );
 }
 function Btn({ children, onClick, kind = "ghost", style, disabled }) {
-  const base = { padding: "12px 16px", borderRadius: 12, fontSize: 15, fontWeight: 600, border: "1px solid " + T.line, background: "transparent", color: T.card, opacity: disabled ? 0.4 : 1, transition: "transform .08s ease" };
+  const base = { padding: "12px 16px", borderRadius: 12, fontSize: 15, fontWeight: 600, border: "1px solid rgba(201,165,70,0.15)", background: "rgba(10,26,18,0.55)", color: T.card, opacity: disabled ? 0.4 : 1, transition: "transform .08s ease" };
   const kinds = {
-    primary: { background: T.brass, color: "#1B1505", border: "1px solid " + T.brass },
+    primary: { background: T.brass, color: "#1B1505", border: "1px solid " + T.brass, boxShadow: "0 4px 20px rgba(201,165,70,0.28)" },
     danger: { background: "transparent", color: T.bad, border: "1px solid rgba(224,113,107,.4)" },
     felt: { background: T.baize2, border: "1px solid " + T.line },
   };
@@ -1310,7 +1322,7 @@ function RatingBar({ value, delta, band }) {
           <b style={{ color: T.brass }}>Edge</b> rates the quality of your decisions, not whether you won or lost a hand. A correct fold that saves chips counts for you even in a pot you lost, and a lucky win with a bad call does not. It moves like a chess rating: beat tougher spots and it climbs. Most beginners start near 1000, and a solid winning player sits past 1500.
         </div>
       )}
-      <div style={{ height: 8, borderRadius: 4, background: "#0A1812", border: "1px solid " + T.line, position: "relative" }}>
+      <div style={{ height: 8, borderRadius: 4, background: "rgba(201,165,70,0.08)", border: "1px solid " + T.line, position: "relative" }}>
         <div style={{ height: "100%", width: `${pct}%`, borderRadius: 4, background: `linear-gradient(90deg, ${T.brassDim}, ${T.brass})`, transition: "width .6s ease" }} />
         {TIERS.slice(1).map(([m]) => (
           <div key={m} style={{ position: "absolute", left: `${((m - 400) / 2400) * 100}%`, top: 0, bottom: 0, width: 1, background: "rgba(201,165,70,.25)" }} />
@@ -1332,22 +1344,20 @@ function NavBar({ screen, go }) {
     { id: "profile", label: "Profile", glyph: "♥" },
   ];
   return (
-    <nav style={{ position: "fixed", bottom: 0, left: "max(0px, calc(50% - 220px))", right: "max(0px, calc(50% - 220px))", background: "rgba(8,18,13,.96)", borderTop: "1px solid " + T.line, backdropFilter: "blur(8px)", zIndex: 30 }}>
-      <div style={{ display: "flex", height: 52 }}>
-        {items.map((it) => {
-          const playScreens = ["play", "lobby", "review", "replay", "mpsetup", "mptable", "puzzle", "puzzlereview", "mpreview"];
-          const learnScreens = ["learn", "module"];
-          const on = it.id === "play" ? playScreens.includes(screen) : it.id === "learn" ? learnScreens.includes(screen) : screen === it.id;
-          const red = it.glyph === "♥" || it.glyph === "♦";
-          const glyphColor = on ? (red ? T.cordovan : T.brass) : (red ? "rgba(224,113,107,.7)" : "rgba(201,165,70,.72)");
-          return (
-            <button key={it.id} onClick={() => go(it.id)} aria-label={it.label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, background: "none", border: "none", color: on ? (red ? T.cordovan : T.brass) : T.mist, padding: 0 }}>
-              <div style={{ fontSize: it.glyph === "◈" ? 16 : 20, lineHeight: 1, color: glyphColor }}>{it.glyph}</div>
-              <div style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", fontWeight: on ? 700 : 500, color: on ? (red ? T.cordovan : T.brass) : T.mist }}>{it.label}</div>
-            </button>
-          );
-        })}
-      </div>
+    <nav className="gp" style={{ position: "fixed", bottom: 0, left: "max(0px, calc(50% - 220px))", right: "max(0px, calc(50% - 220px))", display: "flex", background: "rgba(8,18,13,0.72)", borderTop: "1px solid " + T.line, zIndex: 30 }}>
+      {items.map((it) => {
+        const playScreens = ["play", "lobby", "review", "replay", "mpsetup", "mptable", "puzzle", "puzzlereview", "mpreview"];
+        const learnScreens = ["learn", "module"];
+        const on = it.id === "play" ? playScreens.includes(screen) : it.id === "learn" ? learnScreens.includes(screen) : screen === it.id;
+        const red = it.glyph === "♥" || it.glyph === "♦";
+        const glyphColor = on ? (red ? T.cordovan : T.brass) : (red ? "rgba(224,113,107,.7)" : "rgba(201,165,70,.72)");
+        return (
+          <button key={it.id} onClick={() => go(it.id)} aria-label={it.label} style={{ flex: 1, padding: "10px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", background: "none", border: "none", color: on ? (red ? T.cordovan : T.brass) : T.mist }}>
+            <div style={{ fontSize: it.glyph === "◈" ? 16 : 20, lineHeight: 1, color: glyphColor }}>{it.glyph}</div>
+            <div style={{ fontSize: 10, marginTop: 3, letterSpacing: ".05em", textTransform: "uppercase", fontWeight: on ? 700 : 500, color: on ? (red ? T.cordovan : T.brass) : T.mist }}>{it.label}</div>
+          </button>
+        );
+      })}
     </nav>
   );
 }
@@ -1399,10 +1409,10 @@ function StrengthStrip({ hero, board, equity }) {
   const name = handName(hero, board);
   const pct = Math.round(equity * 100);
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, background: "linear-gradient(180deg, rgba(20,40,31,.95), rgba(12,28,21,.95))", border: "1px solid " + T.line, borderLeft: `4px solid ${T.brass}`, borderRadius: 12, padding: "9px 14px" }}>
+    <div className="gp" style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(10,26,18,0.72)", border: "1px solid " + T.line, borderLeft: `3px solid ${T.brass}`, borderRadius: 12, padding: "9px 14px" }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="serif" style={{ fontSize: 17, color: T.card, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
-        <div style={{ height: 5, borderRadius: 3, background: "#0A1812", marginTop: 5 }}>
+        <div style={{ height: 5, borderRadius: 3, background: "rgba(201,165,70,0.08)", marginTop: 5 }}>
           <div style={{ height: "100%", width: pct + "%", borderRadius: 3, background: pct > 60 ? T.good : pct > 35 ? T.brass : T.cordovan, transition: "width .5s ease" }} />
         </div>
       </div>
@@ -2212,7 +2222,7 @@ function PuzzleScreen({ run, onResult, onNext, onExit, justCompleted }) {
           const heroCode = hero.cards && hero.cards.length === 2 ? handCode(hero.cards[0], hero.cards[1]) : null;
           const reqEq = toCall > 0 ? toCall / (pot + toCall) : null;
           return (
-            <div className="fadeup" style={{ flex: 1, overflowY: "auto", background: "#0E2218", borderTop: `3px solid ${vColor}`, borderRadius: "16px 16px 0 0", padding: "14px 16px", paddingBottom: "calc(14px + env(safe-area-inset-bottom))" }}>
+            <div className="fadeup" style={{ flex: 1, overflowY: "auto", background: "rgba(8,22,14,0.96)", borderTop: `3px solid ${vColor}`, borderRadius: "16px 16px 0 0", padding: "14px 16px", paddingBottom: "calc(14px + env(safe-area-inset-bottom))" }}>
               {/* Header row: verdict + best-play chip */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <span className="serif" style={{ fontSize: 19, color: vColor }}>
@@ -2581,7 +2591,7 @@ function StreakCard({ streak, streakDay, daily, trainerState }) {
   const daysToNext = nextMs ? nextMs[0] - streak : 0;
 
   return (
-    <div style={{ background: T.baize2, border: `1px solid ${todayDone ? "rgba(127,201,127,.35)" : T.line}`, borderRadius: 14, padding: "14px 16px", marginTop: 16, marginBottom: 4 }}>
+    <div className="gp" style={{ background: T.baize2, border: `1px solid ${todayDone ? "rgba(127,201,127,.35)" : T.line}`, borderRadius: 14, padding: "14px 16px", marginTop: 16, marginBottom: 4 }}>
       {/* Header: streak number + today status */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 7 }}>
@@ -2895,7 +2905,7 @@ function HomeScreen({ user, sessions, lifetime, rating, go, streak, streakDay, d
 
       <SectionTitle right={<button onClick={() => go("log")} style={{ background: "none", border: "none", color: T.brass, fontSize: 12, padding: 0, whiteSpace: "nowrap" }}>All sessions →</button>}>Last session</SectionTitle>
       {last ? (
-        <button onClick={() => go("review")} style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.line, borderRadius: 12, padding: "16px 18px", color: T.card }}>
+        <button onClick={() => go("review")} className="gp" style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.line, borderRadius: 12, padding: "16px 18px", color: T.card }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
             <span className="serif" style={{ fontSize: 24, color: last.stats.net >= 0 ? T.good : T.bad }}>{last.stats.net >= 0 ? "+" : ""}{last.stats.net.toLocaleString()}</span>
             <span style={{ fontSize: 12, color: T.faint }}>{last.stats.hands} hands, tap to review</span>
@@ -2937,7 +2947,7 @@ function Lobby({ onStart, onPrivate, go, rating, progress }) {
       {BOT_TIERS.map((t) => {
         const unlocked = UNLOCK_ALL_FOR_TESTING || t.riq === 0 || rating >= t.riq || progress["tier-unlock-" + t.id];
         return (
-          <button key={t.id} disabled={!unlocked} onClick={() => unlocked && onStart(t)} style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + (unlocked ? T.brass : T.line), borderRadius: 14, padding: 16, color: T.card, marginBottom: 10, opacity: unlocked ? 1 : 0.5 }}>
+          <button key={t.id} disabled={!unlocked} onClick={() => unlocked && onStart(t)} className="gp" style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.line, borderLeft: unlocked ? `3px solid rgba(201,165,70,0.5)` : "3px solid rgba(94,122,107,0.2)", borderRadius: 14, padding: 16, color: T.card, marginBottom: 10, opacity: unlocked ? 1 : 0.45 }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span className="serif" style={{ fontSize: 18 }}>{"♠".repeat(t.id)} {t.name}</span>
               {!unlocked && <span className="mono" style={{ fontSize: 10, color: T.faint, border: "1px solid " + T.line, borderRadius: 6, padding: "2px 6px", height: "fit-content" }}>🔒 Edge {t.riq} or beat tier {t.id - 1}</span>}
@@ -2947,7 +2957,7 @@ function Lobby({ onStart, onPrivate, go, rating, progress }) {
         );
       })}
       <SectionTitle>With people</SectionTitle>
-      <button onClick={() => onPrivate()} style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.brass, borderRadius: 14, padding: 18, color: T.card, marginBottom: 12 }}>
+      <button onClick={() => onPrivate()} className="gp" style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.line, borderLeft: `3px solid rgba(201,165,70,0.45)`, borderRadius: 14, padding: 18, color: T.card, marginBottom: 12 }}>
         <span className="serif" style={{ fontSize: 19 }}>Private table</span>
         <div style={{ fontSize: 12.5, color: T.mist, marginTop: 5 }}>Real friends, one 6-digit code. The server deals, so nobody can peek at the deck. Every hand scores your decisions against how they actually play.</div>
       </button>
@@ -3092,7 +3102,7 @@ function ReviewScreen({ session, rating, band, go, openModule, openReplay, lifet
         </div>
       )}
       {handList.map((h, i) => (
-        <button key={h.handNo + "-" + i} onClick={() => openReplay(h)} style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.line, borderRadius: 14, padding: 12, marginBottom: 8, color: T.card }}>
+        <button key={h.handNo + "-" + i} onClick={() => openReplay(h)} className="gp" style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.line, borderRadius: 14, padding: 12, marginBottom: 8, color: T.card }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
               <span className="mono" style={{ fontSize: 11, color: T.faint, marginRight: 5 }}>#{h.handNo + 1}</span>
@@ -3286,13 +3296,13 @@ function LearnScreen({ progress, openModule, focusLeaks, onTrainer, ratingHistor
             <SectionTitle right={<span className="mono" style={{ fontSize: 11, color: T.faint }}>{done}/{t.modules.length}</span>}>
               <span style={{ color: ["♥", "♦"].includes(t.suit) ? T.cordovan : T.brass }}>{t.suit}</span> {t.topic}
             </SectionTitle>
-            <div style={{ height: 4, borderRadius: 2, background: "#0A1812", marginBottom: 10 }}>
+            <div style={{ height: 4, borderRadius: 2, background: "rgba(201,165,70,0.08)", marginBottom: 10 }}>
               <div style={{ height: "100%", width: `${(done / t.modules.length) * 100}%`, background: T.brass, borderRadius: 2, transition: "width .4s" }} />
             </div>
             {t.modules.map((m, i) => {
               const locked = !UNLOCK_ALL_FOR_TESTING && i > 0 && !progress[t.modules[i - 1].id];
               return (
-                <button key={m.id} disabled={locked} onClick={() => openModule(m.id)} style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.line, borderRadius: 12, padding: 13, marginBottom: 8, color: T.card, opacity: locked ? 0.45 : 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <button key={m.id} disabled={locked} onClick={() => openModule(m.id)} className="gp" style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.line, borderRadius: 12, padding: 13, marginBottom: 8, color: T.card, opacity: locked ? 0.45 : 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 600 }}>{progress[m.id] ? "✓ " : ""}{m.title}</div>
                     <div style={{ fontSize: 11.5, color: T.mist, marginTop: 2 }}>{m.min} min lesson + drill</div>
@@ -3338,7 +3348,7 @@ function ModuleScreen({ moduleId, back, progress, modStats, onExercises }) {
             <div style={{ fontSize: 12.5, color: T.mist, lineHeight: 1.5 }}>
               Endless table exercises, only on this topic. They get harder as you get better.
             </div>
-            <div style={{ height: 6, borderRadius: 3, background: "#0A1812", margin: "10px 0 5px" }}>
+            <div style={{ height: 6, borderRadius: 3, background: "rgba(201,165,70,0.08)", margin: "10px 0 5px" }}>
               <div style={{ height: "100%", width: `${Math.min(100, (correct / 5) * 100)}%`, borderRadius: 3, background: done ? T.good : T.brass, transition: "width .4s" }} />
             </div>
             <div style={{ fontSize: 11, color: T.faint }}>{done ? "Module complete, keep drilling to push the level." : `${Math.min(correct, 5)}/5 correct to complete this module`}</div>
@@ -3392,7 +3402,7 @@ function ProfileScreen({ user, rating, ratingHistory, sessions, progress, answer
         </div>
       </div>
       <SectionTitle>Rating</SectionTitle>
-      <div style={{ background: T.baize2, border: "1px solid " + T.line, borderRadius: 14, padding: 16 }}>
+      <div className="gp" style={{ background: T.baize2, border: "1px solid " + T.line, borderRadius: 14, padding: 16 }}>
         <RatingBar value={rating} delta={sessions.length ? sessions[sessions.length - 1].ratingDelta : null} band={ratingBand(lifetime.hands)} />
         {pts && (
           <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ marginTop: 14, display: "block" }} aria-label="Rating history">
@@ -3875,7 +3885,7 @@ function MiniCard({ r, s }) {
 function HandRankSheet({ onClose }) {
   return (
     <div onClick={onClose} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: "58px", zIndex: 28, background: "rgba(4,8,6,.6)", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-      <div onClick={(e) => e.stopPropagation()} className="fadeup" style={{ background: "#0E2218", borderTop: `1px solid ${T.brass}`, borderRadius: "18px 18px 0 0", maxHeight: "100%", overflowY: "auto", padding: "20px 18px 24px", maxWidth: 440, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+      <div onClick={(e) => e.stopPropagation()} className="fadeup gp" style={{ background: "rgba(8,22,14,0.88)", borderTop: `1px solid ${T.brass}`, borderRadius: "18px 18px 0 0", maxHeight: "100%", overflowY: "auto", padding: "20px 18px 24px", maxWidth: 440, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
           <div className="serif" style={{ fontSize: 23, color: T.card }}>Hand rankings</div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: T.brass, fontSize: 13 }}>Close</button>
@@ -3922,7 +3932,7 @@ function RangeSheet({ onClose }) {
   const ex = POS_EXPLAIN[pos];
   return (
     <div onClick={onClose} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: "58px", zIndex: 28, background: "rgba(4,8,6,.6)", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-      <div onClick={(e) => e.stopPropagation()} className="fadeup" style={{ background: "#0E2218", borderTop: `1px solid ${T.brass}`, borderRadius: "18px 18px 0 0", maxHeight: "100%", overflowY: "auto", padding: "20px 18px 24px", maxWidth: 440, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+      <div onClick={(e) => e.stopPropagation()} className="fadeup gp" style={{ background: "rgba(8,22,14,0.88)", borderTop: `1px solid ${T.brass}`, borderRadius: "18px 18px 0 0", maxHeight: "100%", overflowY: "auto", padding: "20px 18px 24px", maxWidth: 440, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
           <div className="serif" style={{ fontSize: 23, color: T.card }}>Opening ranges</div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: T.brass, fontSize: 13 }}>Close</button>
@@ -4633,7 +4643,7 @@ function LogScreen({ profile, go, openModule }) {
 
       {selectedHand && (
         <div onClick={() => setSelectedHand(null)} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(4,10,7,.78)", display: "flex", alignItems: "flex-end" }}>
-          <div onClick={(e) => e.stopPropagation()} className="fadeup" style={{ width: "100%", maxWidth: 480, margin: "0 auto", background: "#0E2218", borderTop: `3px solid ${T.bad}`, borderRadius: "18px 18px 0 0", padding: "18px 18px calc(28px + env(safe-area-inset-bottom))" }}>
+          <div onClick={(e) => e.stopPropagation()} className="fadeup" style={{ width: "100%", maxWidth: 480, margin: "0 auto", background: "rgba(8,22,14,0.96)", borderTop: `3px solid ${T.bad}`, borderRadius: "18px 18px 0 0", padding: "18px 18px calc(28px + env(safe-area-inset-bottom))" }}>
             <HandDetailSheet hand={selectedHand} openModule={openModule} onClose={() => setSelectedHand(null)} />
           </div>
         </div>
@@ -5321,8 +5331,11 @@ export default function App() {
   return (
     <div className="riq app-root" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "radial-gradient(140% 100% at 50% 0%, #0A1A12 0%, #060D09 60%)", display: "flex", justifyContent: "center", alignItems: "stretch" }}>
       <style>{CSS}</style>
-      <div className="felt-grain app-shell" style={{ position: "relative", width: "100%", maxWidth: 440, height: "100dvh", background: `radial-gradient(120% 80% at 50% -5%, ${T.baize2} 0%, ${T.baize} 55%, #081109 100%)`, overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, overflow: "hidden" }}>{body}</div>
+      <div className="felt-grain app-shell" style={{ position: "relative", width: "100%", maxWidth: 440, height: "100dvh", background: "radial-gradient(120% 80% at 50% -5%, #122A1F 0%, #0A1A12 55%, #060D09 100%)", overflow: "hidden" }}>
+        <div className="orb" style={{ width: 480, height: 480, top: "-12%", left: "-18%", background: "rgba(18,70,45,0.32)", animation: "riqBgDrift0 38s ease-in-out infinite" }} />
+        <div className="orb" style={{ width: 400, height: 400, bottom: "2%", right: "-16%", background: "rgba(10,50,30,0.28)", animation: "riqBgDrift1 44s ease-in-out infinite 6s" }} />
+        <div className="orb" style={{ width: 320, height: 320, top: "36%", left: "42%", background: "rgba(201,165,70,0.09)", animation: "riqBgDrift2 32s ease-in-out infinite 14s" }} />
+        <div key={screen} className="screen-in" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, overflow: "hidden", zIndex: 1 }}>{body}</div>
         {showHandBtn && <HandRankButton onOpen={() => setShowHands(true)} />}
         {showHandBtn && <RangeButton onOpen={() => setShowRanges(true)} />}
         {showHands && <HandRankSheet onClose={() => setShowHands(false)} />}
