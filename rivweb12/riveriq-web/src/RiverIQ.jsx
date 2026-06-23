@@ -1340,7 +1340,7 @@ function NavBar({ screen, go }) {
         const red = it.glyph === "♥" || it.glyph === "♦";
         const glyphColor = on ? (red ? T.cordovan : T.brass) : (red ? "rgba(224,113,107,.7)" : "rgba(201,165,70,.72)");
         return (
-          <button key={it.id} onClick={() => go(it.id)} aria-label={it.label} style={{ flex: 1, padding: "10px 0 8px", background: "none", border: "none", color: on ? (red ? T.cordovan : T.brass) : T.mist }}>
+          <button key={it.id} onClick={() => go(it.id)} aria-label={it.label} style={{ flex: 1, padding: "10px 0 4px", background: "none", border: "none", color: on ? (red ? T.cordovan : T.brass) : T.mist }}>
             <div style={{ fontSize: it.glyph === "◈" ? 16 : 20, lineHeight: 1, color: glyphColor }}>{it.glyph}</div>
             <div style={{ fontSize: 10, marginTop: 3, letterSpacing: ".05em", textTransform: "uppercase", fontWeight: on ? 700 : 500, color: on ? (red ? T.cordovan : T.brass) : T.mist }}>{it.label}</div>
           </button>
@@ -5317,7 +5317,7 @@ export default function App() {
 
   const showHandBtn = user && ["home", "lobby", "learn", "profile"].includes(screen);
   return (
-    <div className="riq app-root" style={{ position: "fixed", inset: 0, background: "radial-gradient(140% 100% at 50% 0%, #0A1A12 0%, #060D09 60%)", display: "flex", justifyContent: "center", alignItems: "stretch" }}>
+    <div className="riq app-root" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "radial-gradient(140% 100% at 50% 0%, #0A1A12 0%, #060D09 60%)", display: "flex", justifyContent: "center", alignItems: "stretch" }}>
       <style>{CSS}</style>
       <div className="felt-grain app-shell" style={{ position: "relative", width: "100%", maxWidth: 440, height: "100%", background: `radial-gradient(120% 80% at 50% -5%, ${T.baize2} 0%, ${T.baize} 55%, #081109 100%)`, overflow: "hidden" }}>
         <div style={{ position: "absolute", top: "env(safe-area-inset-top)", left: 0, right: 0, bottom: 0, overflow: "hidden" }}>{body}</div>
