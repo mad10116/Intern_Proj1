@@ -1332,7 +1332,7 @@ function NavBar({ screen, go }) {
     { id: "profile", label: "Profile", glyph: "♥" },
   ];
   return (
-    <nav style={{ position: "fixed", bottom: 0, left: "max(0px, calc(50% - 220px))", right: "max(0px, calc(50% - 220px))", background: "rgba(8,18,13,.96)", borderTop: "1px solid " + T.line, backdropFilter: "blur(8px)", zIndex: 30, paddingBottom: "env(safe-area-inset-bottom)" }}>
+    <nav style={{ position: "fixed", bottom: 0, left: "max(0px, calc(50% - 220px))", right: "max(0px, calc(50% - 220px))", background: "rgba(8,18,13,.96)", borderTop: "1px solid " + T.line, backdropFilter: "blur(8px)", zIndex: 30 }}>
       <div style={{ display: "flex", height: 52 }}>
         {items.map((it) => {
           const playScreens = ["play", "lobby", "review", "replay", "mpsetup", "mptable", "puzzle", "puzzlereview", "mpreview"];
@@ -2075,7 +2075,7 @@ function PuzzleReviewScreen({ run, onDone }) {
     : acc >= 50 ? { kind: "flag", title: "Solid reps", line: "A few of these went the wrong way. Drilling the same spots again is how they stick." }
     : { kind: "flag", title: "Good to spot these now", line: "Plenty missed, but that is the point of drilling. Run it again and watch the number climb." };
   return (
-    <div style={{ padding: "calc(24px + env(safe-area-inset-top)) 18px calc(90px + env(safe-area-inset-bottom))", height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: "calc(24px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <div className="serif" style={{ fontSize: 27, color: T.card }}>Drill review</div>
         <button onClick={onDone} style={{ background: "none", border: "none", color: T.brass, fontSize: 13 }}>Done</button>
@@ -2333,7 +2333,7 @@ function LeaderboardScreen({ go }) {
     })();
   }, []); // eslint-disable-line
   return (
-    <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px calc(90px + env(safe-area-inset-bottom))", height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <div className="serif" style={{ fontSize: 25, color: T.card }}>♛ Leaderboard</div>
         <button onClick={() => go("home")} style={{ background: "none", border: "none", color: T.brass, fontSize: 13 }}>Done</button>
@@ -2816,7 +2816,7 @@ function HomeScreen({ user, sessions, lifetime, rating, go, streak, streakDay, d
   const [scenarioFamily, setScenarioFamily] = useState(null);
 
   return (
-    <div style={{ padding: "calc(26px + env(safe-area-inset-top)) 20px calc(96px + env(safe-area-inset-bottom))", overflowY: "auto", height: "100%" }}>
+    <div style={{ padding: "calc(26px + env(safe-area-inset-top)) 20px 80px", overflowY: "auto", height: "100%" }}>
       <div className="serif" style={{ fontSize: 30, color: T.card, lineHeight: 1.05 }}>{greet}, {user.name}.</div>
       <div style={{ color: T.faint, fontSize: 13, marginTop: 4 }}>{lifetime.hands > 0 ? percentileLine(rating) : "A seat is open whenever you are."}</div>
 
@@ -2930,7 +2930,7 @@ function HomeScreen({ user, sessions, lifetime, rating, go, streak, streakDay, d
 }
 function Lobby({ onStart, onPrivate, go, rating, progress }) {
   return (
-    <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px calc(90px + env(safe-area-inset-bottom))", height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto" }}>
       <div className="serif" style={{ fontSize: 25, color: T.card, marginBottom: 4 }}>Choose your table</div>
       <div style={{ color: T.faint, fontSize: 13, marginBottom: 20 }}>6-max No-Limit Hold'em · blinds {SB}/{BB} · {START_STACK.toLocaleString()} chips</div>
       <SectionTitle>Solo ladder</SectionTitle>
@@ -2998,7 +2998,7 @@ function ReviewScreen({ session, rating, band, go, openModule, openReplay, lifet
   const worst = buckets[0], best = buckets[buckets.length - 1];
   const handList = showAllHands ? session.allHands : session.keyHands;
   return (
-    <div style={{ padding: "calc(24px + env(safe-area-inset-top)) 18px calc(96px + env(safe-area-inset-bottom))", height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: "calc(24px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <div className="serif" style={{ fontSize: 27, color: T.card }}>The hand back</div>
         <button onClick={() => go("home")} style={{ background: "none", border: "none", color: T.brass, fontSize: 13 }}>Done</button>
@@ -3118,7 +3118,7 @@ function ReplayScreen({ hand, back }) {
   const totalLost = Math.round(acts.filter((x) => x.idx === 0).reduce((s, x) => s + (x.evLoss || 0), 0) * BB);
   const v = a && a.idx === 0 ? verdictFor(a) : null;
   return (
-    <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px calc(90px + env(safe-area-inset-bottom))", height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto" }}>
       <button onClick={back} style={{ background: "none", border: "none", color: T.brass, fontSize: 13, padding: 0 }}>← Back to review</button>
       <div className="serif" style={{ fontSize: 23, color: T.card, margin: "10px 0 4px" }}>Hand #{hand.handNo + 1} replay</div>
       <div style={{ fontSize: 12, color: T.faint, marginBottom: 14 }}>
@@ -3191,7 +3191,7 @@ function ReplayScreen({ hand, back }) {
 function LearnScreen({ progress, openModule, focusLeaks, onTrainer, ratingHistory, sessions }) {
   const recIds = (focusLeaks || []).map((l) => l.module);
   return (
-    <div style={{ padding: "calc(24px + env(safe-area-inset-top)) 18px calc(96px + env(safe-area-inset-bottom))", height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: "calc(24px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto" }}>
       <div className="serif" style={{ fontSize: 27, color: T.card }}>Learn</div>
       <div style={{ width: "100%", background: "rgba(201,165,70,.08)", border: "1px solid " + T.brass, borderRadius: 14, padding: 16, color: T.card, marginTop: 14 }}>
         <div className="serif" style={{ fontSize: 20, color: T.brass }}>♠ Spot trainer</div>
@@ -3317,7 +3317,7 @@ function ModuleScreen({ moduleId, back, progress, modStats, onExercises }) {
   const lvl = 1 + Math.min(8, Math.floor(correct / 4));
   const acc = attempts ? Math.round((correct / attempts) * 100) : null;
   return (
-    <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px calc(90px + env(safe-area-inset-bottom))", height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto" }}>
       <button onClick={back} style={{ background: "none", border: "none", color: T.brass, fontSize: 13, padding: 0 }}>← Learn</button>
       <div className="mono" style={{ fontSize: 11, color: T.faint, letterSpacing: ".08em", marginTop: 12 }}>{m.topic.toUpperCase()} · {m.min} MIN{done ? " · ✓ COMPLETE" : ""}</div>
       <div className="serif" style={{ fontSize: 24, color: T.card, margin: "6px 0 14px" }}>{m.title}</div>
@@ -3383,7 +3383,7 @@ function ProfileScreen({ user, rating, ratingHistory, sessions, progress, answer
   const yOf = (v) => H - ((v - lo) / Math.max(1, hi - lo)) * H;
   const pts = ratingHistory.length > 1 ? ratingHistory.map((v, i) => `${(i / (ratingHistory.length - 1)) * W},${yOf(v)}`).join(" ") : null;
   return (
-    <div style={{ padding: "calc(24px + env(safe-area-inset-top)) 18px calc(96px + env(safe-area-inset-bottom))", height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: "calc(24px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <div className="serif" style={{ width: 56, height: 56, borderRadius: "50%", background: T.baize2, border: "2px solid " + T.brass, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, color: T.brass }}>{user.name[0].toUpperCase()}</div>
         <div>
@@ -3545,7 +3545,7 @@ function MpSetup({ onSeated, back }) {
   }
   const inputStyle = { width: "100%", padding: "13px 16px", borderRadius: 12, border: "1px solid " + T.line, background: T.baize2, color: T.card, fontSize: 17, textAlign: "center", letterSpacing: ".3em" };
   return (
-    <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px calc(90px + env(safe-area-inset-bottom))", height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto" }}>
       <button onClick={back} style={{ background: "none", border: "none", color: T.brass, fontSize: 13, padding: 0 }}>← Lobby</button>
       <div className="serif" style={{ fontSize: 25, color: T.card, margin: "12px 0 4px" }}>Private table</div>
       <div style={{ color: T.faint, fontSize: 13, marginBottom: 20 }}>Real people only, share a 6-digit code. The server deals; nobody can peek.</div>
@@ -3690,7 +3690,7 @@ function MpTableScreen({ table, mySeat, profile, onLeft }) {
 
   if (!pub) {
     return (
-      <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px calc(90px + env(safe-area-inset-bottom))", height: "100%", overflowY: "auto", textAlign: "center" }}>
+      <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto", textAlign: "center" }}>
         <div className="serif" style={{ fontSize: 24, color: T.card, marginTop: 30 }}>Waiting room</div>
         <div className="mono" style={{ fontSize: 36, color: T.brass, letterSpacing: ".25em", margin: "16px 0 4px" }}>{table.table_code}</div>
         <div style={{ fontSize: 12.5, color: T.mist, marginBottom: 14 }}>Share this code. {table.min_hands > 0 ? `Players need ${table.min_hands}+ lifetime hands.` : "Anyone can join."}</div>
@@ -3810,7 +3810,7 @@ function MpReviewScreen({ tableId, session, rating, band, go, openModule, openRe
     })();
   }, [tableId]); // eslint-disable-line
   return (
-    <div style={{ padding: "calc(24px + env(safe-area-inset-top)) 18px calc(96px + env(safe-area-inset-bottom))", height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: "calc(24px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <div className="serif" style={{ fontSize: 27, color: T.card }}>The hand back</div>
         <button onClick={() => go("home")} style={{ background: "none", border: "none", color: T.brass, fontSize: 13 }}>Done</button>
@@ -3874,7 +3874,7 @@ function MiniCard({ r, s }) {
 }
 function HandRankSheet({ onClose }) {
   return (
-    <div onClick={onClose} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: "calc(58px + env(safe-area-inset-bottom))", zIndex: 28, background: "rgba(4,8,6,.6)", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+    <div onClick={onClose} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: "58px", zIndex: 28, background: "rgba(4,8,6,.6)", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
       <div onClick={(e) => e.stopPropagation()} className="fadeup" style={{ background: "#0E2218", borderTop: `1px solid ${T.brass}`, borderRadius: "18px 18px 0 0", maxHeight: "100%", overflowY: "auto", padding: "20px 18px 24px", maxWidth: 440, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
           <div className="serif" style={{ fontSize: 23, color: T.card }}>Hand rankings</div>
@@ -3921,7 +3921,7 @@ function RangeSheet({ onClose }) {
   const [pos, setPos] = useState("BTN");
   const ex = POS_EXPLAIN[pos];
   return (
-    <div onClick={onClose} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: "calc(58px + env(safe-area-inset-bottom))", zIndex: 28, background: "rgba(4,8,6,.6)", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+    <div onClick={onClose} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: "58px", zIndex: 28, background: "rgba(4,8,6,.6)", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
       <div onClick={(e) => e.stopPropagation()} className="fadeup" style={{ background: "#0E2218", borderTop: `1px solid ${T.brass}`, borderRadius: "18px 18px 0 0", maxHeight: "100%", overflowY: "auto", padding: "20px 18px 24px", maxWidth: 440, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
           <div className="serif" style={{ fontSize: 23, color: T.card }}>Opening ranges</div>
@@ -4459,7 +4459,7 @@ function LogScreen({ profile, go, openModule }) {
   });
 
   return (
-    <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px calc(90px + env(safe-area-inset-bottom))", height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
         <div className="serif" style={{ fontSize: 25, color: T.card }}>Session log</div>
         <button onClick={() => go("home")} style={{ background: "none", border: "none", color: T.brass, fontSize: 13 }}>Done</button>
