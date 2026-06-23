@@ -5319,7 +5319,7 @@ export default function App() {
   return (
     <div className="riq app-root" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "radial-gradient(140% 100% at 50% 0%, #0A1A12 0%, #060D09 60%)", display: "flex", justifyContent: "center", alignItems: "stretch" }}>
       <style>{CSS}</style>
-      <div className="felt-grain app-shell" style={{ position: "relative", width: "100%", maxWidth: 440, height: "100%", background: `radial-gradient(120% 80% at 50% -5%, ${T.baize2} 0%, ${T.baize} 55%, #081109 100%)`, overflow: "hidden" }}>
+      <div className="felt-grain app-shell" style={{ position: "relative", width: "100%", maxWidth: 440, height: "100dvh", background: `radial-gradient(120% 80% at 50% -5%, ${T.baize2} 0%, ${T.baize} 55%, #081109 100%)`, overflow: "hidden" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, overflow: "hidden" }}>{body}</div>
         {showHandBtn && <HandRankButton onOpen={() => setShowHands(true)} />}
         {showHandBtn && <RangeButton onOpen={() => setShowRanges(true)} />}
