@@ -14,16 +14,16 @@ function haptic(style) {
 /* ============================ THEME ============================ */
 const T = {
   baize: "#0C1F16",      // deep felt
-  baize2: "#123127",     // raised felt
-  rail: "#1B3A2D",
+  baize2: "rgba(10,26,18,0.65)",  // green glass container
+  rail: "rgba(18,58,45,0.42)",    // translucent green rail
   card: "#F7F2E6",       // cream card stock
   ink: "#17211B",
   cordovan: "#C2453E",   // chip red / hearts & diamonds
   brass: "#C9A546",      // premium brass
   brassDim: "#8A7332",
   mist: "#9AB3A4",       // muted text
-  faint: "#5E7A6B",
-  line: "rgba(201,165,70,0.22)",
+  faint: "rgba(94,122,107,0.55)",
+  line: "rgba(201,165,70,0.14)",
   good: "#7FC97F",
   bad: "#E0716B",
 };
@@ -35,6 +35,17 @@ const TIMER_DURATION_S = 22;
 // Set to false before a real launch to restore normal progression gating.
 const UNLOCK_ALL_FOR_TESTING = true;
 const COSMETICS = { back: "classic", felt: null };
+const SHOP_ITEMS = [
+  { id: "back-crimson",  type: "back",  name: "Crimson back",   price: 150, desc: "Deep red diagonal weave" },
+  { id: "back-gold",     type: "back",  name: "Gold lattice",   price: 200, desc: "Warm 45° gold cross-hatch" },
+  { id: "back-jade",     type: "back",  name: "Jade back",      price: 250, desc: "Forest jade weave" },
+  { id: "back-royal",    type: "back",  name: "Royal back",     price: 300, desc: "Midnight radial burst" },
+  { id: "back-ocean",    type: "back",  name: "Ocean back",     price: 350, desc: "Deep teal cross-hatch" },
+  { id: "felt-forest",   type: "felt",  name: "Forest felt",    price: 200, desc: "Deep forest green table" },
+  { id: "felt-midnight", type: "felt",  name: "Midnight felt",  price: 250, desc: "Deep navy table" },
+  { id: "felt-burgundy", type: "felt",  name: "Burgundy felt",  price: 300, desc: "Rich wine-red table" },
+  { id: "felt-slate",    type: "felt",  name: "Slate felt",     price: 300, desc: "Slate blue-grey table" },
+];
 // Feature flags, all enabled. (Internal scaffold; not user-facing.)
 const TIER_FEATURES = {
   free: { spotTrainer: true, dailyDrill: true, leagues: true, spacedReviews: true, opponentScoring: true, tendencies: true, botTier3: true, streakShields: true },
@@ -72,23 +83,46 @@ const CSS = `
 @keyframes riqBeckon { 0%,100% { box-shadow: 0 0 0 0 rgba(201,165,70,.55), inset 0 0 0 rgba(201,165,70,0); } 50% { box-shadow: 0 0 0 9px rgba(201,165,70,0), inset 0 0 12px rgba(201,165,70,.25); } }
 @keyframes riqMissed { 0%,100% { box-shadow: inset 0 0 3px rgba(194,69,62,.18); } 50% { box-shadow: inset 0 0 9px rgba(194,69,62,.5); } }
 @keyframes riqStamp { 0% { opacity: 0; transform: scale(1.6) rotate(-14deg); } 60% { opacity: 1; transform: scale(.92) rotate(-11deg); } 100% { transform: scale(1) rotate(-11deg); opacity: 1; } }
+@keyframes riqScreenIn { 0% { opacity: 0; filter: blur(8px); transform: translateY(20px); } 100% { opacity: 1; filter: blur(0); transform: none; } }
+@keyframes riqBgDrift0 { 0%,100% { transform: translate(0%,0%); } 25% { transform: translate(4%,-9%); } 60% { transform: translate(-5%,6%); } 80% { transform: translate(3%,-4%); } }
+@keyframes riqBgDrift1 { 0%,100% { transform: translate(0%,0%); } 30% { transform: translate(-6%,7%); } 55% { transform: translate(5%,-5%); } 80% { transform: translate(-3%,3%); } }
+@keyframes riqBgDrift2 { 0%,100% { transform: translate(0%,0%); } 20% { transform: translate(5%,4%); } 50% { transform: translate(-4%,-7%); } 75% { transform: translate(3%,6%); } }
+@keyframes riqFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-16px); } }
+@keyframes riqHeartBreak { 0% { transform: scale(1); filter: none; } 18% { transform: scale(1.5); filter: brightness(1.5); } 40% { transform: scale(1.1) rotate(-18deg); } 65% { transform: scale(0.7) rotate(14deg); opacity: .6; } 100% { transform: scale(0) rotate(25deg); opacity: 0; } }
+@keyframes riqWrongShake { 0%,100% { transform: translateX(0); } 14% { transform: translateX(-10px); } 30% { transform: translateX(9px); } 46% { transform: translateX(-7px); } 62% { transform: translateX(5px); } 78% { transform: translateX(-3px); } 92% { transform: translateX(2px); } }
+@keyframes riqRedFlash { 0% { opacity: .75; } 100% { opacity: 0; } }
+@keyframes riqChipFloat { 0% { opacity: 1; transform: translateY(0) scale(1); } 70% { opacity: 1; transform: translateY(-56px) scale(1.08); } 100% { opacity: 0; transform: translateY(-76px) scale(.9); } }
+@keyframes riqComboStamp { 0% { opacity: 0; transform: translateX(-50%) scale(1.8); } 18% { opacity: 1; transform: translateX(-50%) scale(.93); } 72% { opacity: 1; transform: translateX(-50%) scale(1); } 100% { opacity: 0; transform: translateX(-50%) scale(.96); } }
+@keyframes riqScreenShake { 0%,100% { transform: translateX(0); } 12% { transform: translateX(-5px); } 28% { transform: translateX(5px); } 44% { transform: translateX(-4px); } 60% { transform: translateX(4px); } 76% { transform: translateX(-2px); } 90% { transform: translateX(2px); } }
+@keyframes riqGoldParticle { 0% { opacity: 1; transform: translate(0,0) scale(1); } 100% { opacity: 0; transform: translate(var(--px,0px),var(--py,0px)) scale(.2); } }
+@keyframes riqComboBounce { 0% { transform: scale(1); } 28% { transform: scale(1.6); } 58% { transform: scale(.88); } 80% { transform: scale(1.08); } 100% { transform: scale(1); } }
+@keyframes riqFlawlessBorder { 0%,100% { box-shadow: 0 0 0 0 rgba(201,165,70,.3), 0 0 28px rgba(201,165,70,.12); } 50% { box-shadow: 0 0 0 5px rgba(201,165,70,.28), 0 0 55px rgba(201,165,70,.28); } }
+@keyframes riqHeartbeatIn { 0% { opacity: 0; transform: scale(.82); } 38% { transform: scale(1.06); opacity: 1; } 62% { transform: scale(.97); } 100% { transform: scale(1); } }
+@keyframes riqChipRoll { 0% { opacity: 0; transform: translateY(6px); } 100% { opacity: 1; transform: translateY(0); } }
 .riq .deal { animation: riqDealIn .28s ease both; }
 .riq .fadeup { animation: riqFadeUp .35s ease both; }
+.riq .screen-in { animation: riqScreenIn 0.52s cubic-bezier(0.16,1,0.3,1) both; }
+.riq ::-webkit-scrollbar { display: none; }
+.riq * { scrollbar-width: none; }
 /* felt grain: a faint repeating weave so the table never reads as a flat gradient */
 .riq .felt-grain { position: relative; }
 .riq .felt-grain::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
   background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.014) 0 1px, transparent 1px 3px), repeating-linear-gradient(-45deg, rgba(0,0,0,.04) 0 1px, transparent 1px 3px);
   mix-blend-mode: overlay; }
+/* ── Green Glass panel utility ── */
+.riq .gp { backdrop-filter: blur(22px) saturate(160%); -webkit-backdrop-filter: blur(22px) saturate(160%); box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.32), inset 0 1px 0 rgba(201,165,70,0.07); }
+/* Ambient green orbs */
+.riq .orb { position: absolute; border-radius: 50%; pointer-events: none; filter: blur(72px); z-index: 0; }
 @media (prefers-reduced-motion: reduce) { .riq * { animation: none !important; transition: none !important; } }
 /* Responsive shell: phone fills edge-to-edge; laptop/desktop centers a framed table with ambient felt around it. */
 @media (min-width: 480px) {
-  .riq .app-shell { height: min(100dvh, 920px) !important; border-radius: 20px; border: 1px solid rgba(201,165,70,.18); box-shadow: 0 30px 80px rgba(0,0,0,.65), 0 0 0 1px rgba(0,0,0,.4); }
+  .riq .app-shell { height: min(100dvh, 920px) !important; border-radius: 20px; border: 1px solid rgba(201,165,70,.14); box-shadow: 0 30px 80px rgba(0,0,0,.7), 0 0 0 1px rgba(0,0,0,.5); }
   .riq .app-root { padding: 24px; }
 }
 @media (min-width: 480px) and (max-height: 940px) {
   .riq .app-root { align-items: center; }
 }
-.riq input[type=range] { -webkit-appearance:none; width:100%; height:4px; border-radius:2px; background:#2A4A3A; }
+.riq input[type=range] { -webkit-appearance:none; width:100%; height:4px; border-radius:2px; background:rgba(201,165,70,0.1); }
 .riq input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:20px; height:20px; border-radius:50%; background:${"#C9A546"}; border:2px solid #0C1F16; }
 `;
 
@@ -404,6 +438,9 @@ async function dbUpdate(table, query, patch) {
     const r = await sbFetch(`/rest/v1/${table}?${query}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(patch) });
     return r.ok ? await r.json() : null;
   } catch { return null; }
+}
+async function dbDelete(table, query) {
+  try { await sbFetch(`/rest/v1/${table}?${query}`, { method: "DELETE" }); } catch {}
 }
 async function ensureProfile(username) {
   const uid = Auth.session.user.id;
@@ -1105,93 +1142,246 @@ function verdictFor(a) {
 
 /* ============================ LEARN CONTENT ============================ */
 const LEARN = [
-  { topic: "Preflop", suit: "♠", modules: [
-    { id: "pre-1", title: "Starting hand discipline", min: 4, lesson: [
-      "In 6-max, the winning baseline is playing roughly 22–26% of hands. That sounds tight until you realize most hands you're dealt simply lose money from most seats.",
-      "Position decides the range. From the cutoff and button you can open hands like K9s, QTs, and A5s; from UTG those same hands are long-term losers because four players act behind you.",
-      "A simple rule to start: pairs, broadways (two cards T or higher), suited aces, and suited connectors 76s+. Everything else folds until you have a specific read." ],
-      drill: { q: "You're UTG in 6-max with K♦9♦. Best default play?", opts: ["Open raise", "Limp", "Fold"], a: 2, why: "K9s is a fine open from the button but a losing one from UTG, too many players left who dominate it with KQ/KJ/KT." } },
-    { id: "pre-2", title: "Raise or fold, kill the limp", min: 3, lesson: [
-      "Open-limping caps your two ways to win down to one. Raising can win the blinds immediately and gives you the initiative postflop, where the preflop raiser wins a disproportionate share of pots.",
-      "Standard open size is 2.2–3 big blinds. If players have already limped, raise to 3bb plus one per limper, punish them for entering cheap.",
-      "If a hand isn't strong enough to raise, it's almost never strong enough to limp. Raise or fold is a profitable default for everything but the big blind." ],
-      drill: { q: "Two players limp. You're on the button with A♠J♠. You should:", opts: ["Limp along", "Raise to ~5bb", "Fold"], a: 1, why: "AJs crushes limping ranges. 3bb + 1 per limper = 5bb builds a pot in position with the best hand." } },
-  ]},
-  { topic: "Postflop", suit: "♣", modules: [
-    { id: "post-1", title: "Betting for value", min: 5, lesson: [
-      "A value bet is a bet you make hoping to get called by worse. Ask one question before betting: which worse hands call me? If you can name them, bet.",
-      "Players lose more money missing value than making bad bluffs. Top pair on a dry board can comfortably bet three streets against a calling station.",
-      "Size value bets by the board: 50–66% pot on dry boards, 66–80% on wet boards where draws will pay to chase." ],
-      drill: { q: "You hold A♥K♣ on K♠7♦2♣. Opponent checks. Best line?", opts: ["Check back to trap", "Bet ~60% pot", "Bet 10% pot"], a: 1, why: "Dry board, top pair top kicker, worse kings, sevens, and ace-highs call. Checking lets free cards beat you and misses value." } },
-    { id: "post-2", title: "Reading board texture", min: 4, lesson: [
-      "Dry boards (K72 rainbow) hit nobody, so the preflop raiser can bet small and often. Wet boards (J♥T♥9♠) smash calling ranges, proceed carefully even with overpairs.",
-      "Count your outs: flush draw 9, open-ender 8, gutshot 4. Multiply outs by 4 on the flop or 2 on the turn for a rough equity percent.",
-      "When the board pairs or a flush completes, ranges shift violently. The player whose range contains more of the new nuts gets to apply pressure." ],
-      drill: { q: "You have a flush draw on the flop (9 outs). Rough equity to hit by the river?", opts: ["~18%", "~36%", "~50%"], a: 1, why: "Rule of 4: 9 outs × 4 ≈ 36% to complete by the river with two cards to come." } },
-  ]},
-  { topic: "Bluffing", suit: "♥", modules: [
-    { id: "bluff-1", title: "Bluff with a story", min: 4, lesson: [
-      "Good bluffs represent a real hand. If the board runs out 8♠6♠2♦-K♠ and you raised preflop, the king and the flush both belong to your story, barreling is credible.",
-      "Bluff with blockers and backup: hands like A♠5♠ on spade boards block the nut flush while holding live outs if called.",
-      "Pick targets, not moments. Bluff players who can fold. The station who calls everything is the player you only value bet." ],
-      drill: { q: "Best candidate hand to bluff the river on K♠Q♠7♦4♠2♥?", opts: ["A♠J♦ (nut spade blocker)", "7♣6♣ (third pair)", "K♦T♦ (top pair)"], a: 0, why: "A♠ blocks the nut flush you're representing, and the hand has no showdown value, the perfect bluffing combo. The other two win at showdown often enough to check." } },
-  ]},
-  { topic: "Sizing", suit: "♦", modules: [
-    { id: "size-1", title: "Pot odds in five seconds", min: 4, lesson: [
-      "Pot odds = call ÷ (pot + call). Facing a 50 bet into 100, you call 50 to win 200: 50/200 = 25%. Your hand needs 25% equity to continue.",
-      "Memorize three numbers: half-pot bet needs 25%, two-thirds needs ~28.5%, full pot needs 33%.",
-      "Compare with the rule of 4 and 2 and the decision makes itself. Flush draw (36%) vs a pot-sized bet (33%)? Call. Gutshot (16%) vs half pot (25%)? Fold." ],
-      drill: { q: "Pot is 200, opponent bets 100. What equity do you need to call?", opts: ["20%", "25%", "33%"], a: 1, why: "Call 100 to win 400 total → 100/400 = 25%." } },
-    { id: "size-2", title: "Sizing tells a story too", min: 3, lesson: [
-      "Your bet size should serve a goal: small (25–40%) to deny equity cheaply on dry boards, medium (50–70%) for standard value, large (75–125%) when ranges are polarized, you're nutted or bluffing.",
-      "Against weaker players, exploit instead: size up your value, size down your bluffs. They call based on their cards, not your size.",
-      "Keep one size per board type so your bets don't leak information. Varying size by hand strength is the most common amateur tell." ],
-      drill: { q: "You want to deny equity on a dry A♦8♣3♠ board as the raiser. Sizing?", opts: ["33% pot", "75% pot", "150% pot"], a: 0, why: "Dry boards favor the raiser's range; a small bet folds out overcards and gutters cheaply while keeping your whole range protected." } },
-  ]},
-  { topic: "Ranges", suit: "♠", modules: [
-    { id: "range-1", title: "Think in ranges, not hands", min: 5, lesson: [
-      "You'll never know an opponent's exact two cards. You can know the set of hands they'd play this way, that set is their range, and every street's action prunes it.",
-      "When facing aggression, ask: how many combos in their range beat me, and how many are bluffs or worse value? Folding decent equity because one possible hand beats you is the leak this module exists to fix.",
-      "Combos make it concrete: every unpaired hand is 16 combos (4 suited), every pocket pair is 6. If only AA beats you (6 combos) but they'd play 30+ combos this way, calling is clear." ],
-      drill: { q: "Opponent's river jam makes sense with 8 value combos and ~14 plausible bluff combos. Bet is pot-sized (need 33%). You beat the bluffs. Call?", opts: ["Fold, they have it", "Call, you win ~64% of the time", "Raise"], a: 1, why: "14 of 22 combos are bluffs you beat ≈ 64% equity, far above the 33% you need. Range math overrules fear." } },
-  ]},
-  { topic: "Position", suit: "♣", modules: [
-    { id: "pos-1", title: "Why the button prints money", min: 4, lesson: [
-      "Acting last is the biggest structural edge in poker. On the button you see everyone's decision before making yours, every street, all hand long. That information is worth real chips.",
-      "The same hand changes value by seat: K9 suited is a losing open from first position and a profitable one from the button, purely because fewer players act behind you and you'll play the pot with the betting lead and the last word.",
-      "Practical rule: widen as you move clockwise. Tight up front, loosest on the button, and treat out-of-position pots as ones that need a stronger hand to enter." ] },
-  ]},
-  { topic: "Multiway pots", suit: "♦", modules: [
-    { id: "multi-1", title: "More players, different rules", min: 4, lesson: [
-      "Everything changes when three or more players see a flop. Calls get cheaper, with more money already in the pot, the price on your draws improves, but the bar for the winning hand rises, because someone usually connects.",
-      "The two rules: chase more (your draws are priced better) and bluff less (you have to get through everyone, and one caller kills it). A bluff that works 50% against one player works 25% against two.",
-      "Top pair shrinks in multiway pots. Hands that make straights and flushes grow. Adjust which hands you take to a crowded flop accordingly." ] },
-  ]},
-  { topic: "Blind defense", suit: "♥", modules: [
-    { id: "bb-1", title: "Defending your big blind", min: 4, lesson: [
-      "You'll be in the big blind once every six hands, it's the most common situation in poker, and most casual players play it badly in both directions: folding too much to steals, or calling with absolute junk.",
-      "The discount is real: you already have one blind invested and you close the action, so a standard raise only asks you to call 1.5 more blinds into a pot of 4. That price justifies defending a wide range, far wider than you'd play from any other seat.",
-      "The line: suited hands, connected hands, any pair, any ace, defend. Disconnected junk like J3 offsuit, fold without regret. And premiums don't call, they re-raise: make stealers pay." ] },
-  ]},
-  { topic: "Stacks & all-ins", suit: "♠", modules: [
-    { id: "stack-1", title: "Short-stack push or fold", min: 4, lesson: [
-      "Under about 15 big blinds, poker simplifies: raising small and folding to a re-raise wastes your stack, and calling leaves you committed anyway. The professional answer is binary, shove all-in, or fold.",
-      "Shoving first is powerful because it gives opponents a terrible price to call light: you win the blinds outright most of the time, and when called you usually have live cards. The later your seat, the wider you shove, the button at 10 blinds shoves around 4 in 10 hands.",
-      "The discipline cuts both ways: hands below the bar fold, even when you're frustrated and short. One desperation shove with junk undoes an hour of patience." ] },
-  ]},
+  { id: "ch1", chapter: 1, title: "The Game", suit: "♠", desc: "Hand rankings, positions, and how poker is played",
+    modules: [
+      { id: "hands-1", title: "Hand rankings", min: 3, xp: 30, steps: [
+        { type: "info", heading: "The goal", body: "Your hole cards:\nA♥K♦\n\nBoard:\nA♠7♣2♦J♠5♣\n\nMake the best 5-card hand from 2 hole cards + 5 community cards. Highest ranked hand at showdown wins the pot." },
+        { type: "info", heading: "The top 3", body: "Royal Flush:\nA♠K♠Q♠J♠T♠\n\nStraight Flush:\n9♣8♣7♣6♣5♣\n\nFour of a Kind:\nK♠K♥K♦K♣\n\nUnbeatable, near-unbeatable, and crushing — in that order." },
+        { type: "mcq", q: "Player A: A♠K♠Q♠J♠T♠. Player B: K♠K♥K♦K♣A♥. Who wins?", opts: ["Player A — Royal Flush", "Player B — Four Kings", "It's a tie"], a: 0, why: "Royal Flush is the strongest hand in poker — it beats everything, including four of a kind." },
+        { type: "info", heading: "The middle hands", body: "Full House:\nQ♠Q♦Q♥K♠K♣\n\nFlush:\nA♦J♦8♦5♦2♦\n\nStraight:\nT♠9♥8♦7♣6♠\n\nFull House beats Flush beats Straight — always compare categories first." },
+        { type: "mcq", q: "You hold K♠K♦K♥J♠J♣. What hand is this?", opts: ["Full House", "Flush", "Three of a Kind"], a: 0, why: "Three Kings (three of a kind) + two Jacks (a pair) = Full House. It beats a flush and a straight." },
+        { type: "info", heading: "The common hands", body: "Three of a Kind:\nJ♠J♦J♥\n\nTwo Pair:\nQ♠Q♦7♥7♣\n\nOne Pair:\nA♠A♦\n\nMost pots are decided by these. Know what beats what." },
+        { type: "mcq", q: "Which hand wins?", opts: ["Two Pair: K♠K♦7♥7♣A♠", "Straight: A♥2♦3♣4♠5♥", "Three of a Kind: J♠J♦J♥A♣K♠"], a: 1, why: "A Straight beats both Two Pair and Three of a Kind. Always compare hand categories first, then individual card ranks." },
+        { type: "mcq", q: "Both players have one pair. You: J♦J♣. Opponent: Q♠Q♥. Board: A♠K♦7♣3♥2♠. Who wins?", opts: ["You — you acted first", "Opponent — Queens beat Jacks", "Tie — both have one pair"], a: 1, why: "When both players have one pair, compare the pair rank. Queens beat Jacks — the higher pair wins." },
+      ]},
+      { id: "table-1", title: "The table & positions", min: 3, xp: 30, steps: [
+        { type: "info", heading: "6 seats, 1 button", body: "A 6-max table has 6 seats: UTG · MP · CO · BTN · SB · BB.\n\nExample hand on the Button:\nA♠K♦\n\nThe dealer button moves one seat LEFT after every hand, so everyone cycles through each position." },
+        { type: "info", heading: "The blinds", body: "Big Blind's hand:\nJ♦T♦\n\nThe 2 players LEFT of the button post forced bets:\n• Small Blind (SB): half a big blind.\n• Big Blind (BB): one full big blind.\nBlinds create a pot to fight over every hand." },
+        { type: "mcq", q: "Where does the dealer button move after each hand?", opts: ["Stays in place", "One seat to the LEFT", "One seat to the RIGHT"], a: 1, why: "The button moves one seat left (clockwise) after every hand so each player cycles through every position." },
+        { type: "info", heading: "Preflop order", body: "UTG's tough spot:\n7♠2♦\n\nActing order before the flop:\nUTG → MP → CO → BTN → SB → BB\n\nUTG acts FIRST with the least info. 5 players still act behind." },
+        { type: "mcq", q: "Which position acts FIRST before the flop?", opts: ["Small Blind", "UTG (Under the Gun)", "Big Blind"], a: 1, why: "UTG sits immediately left of the BB and must act first preflop — before seeing what anyone else does. It's the toughest spot." },
+        { type: "info", heading: "Postflop flips", body: "Board on the flop:\nK♥7♦2♣\n\nAfter the flop, order reverses:\nSB acts first → … → BTN acts LAST\n\nThis is every street (flop, turn, river). Last to act = most information." },
+        { type: "mcq", q: "On the flop, who acts LAST?", opts: ["UTG", "Small Blind", "Button"], a: 2, why: "The Button always acts last on the flop, turn, and river. Seeing all other players act first is a massive structural edge." },
+        { type: "mcq", q: "Which seat is generally strongest in poker?", opts: ["UTG — you set the tone", "Big Blind — you already paid", "Button — you act last postflop"], a: 2, why: "The Button is best because you act last every postflop street. Information equals power in poker." },
+      ]},
+      { id: "flow-1", title: "How a hand works", min: 4, xp: 30, steps: [
+        { type: "info", heading: "4 streets", body: "Hole cards:\nA♥K♦\n\nFlop:\nA♠7♣2♦\n\nTurn:\nJ♠\n\nRiver:\n9♥\n\n4 betting rounds, 4 chances to read opponents and build the pot." },
+        { type: "mcq", q: "How many community cards are dealt on the flop?", opts: ["One", "Three", "Five"], a: 1, why: "The flop deals 3 community cards face-up. Turn adds a 4th, river adds the 5th — 5 total." },
+        { type: "info", heading: "Your 4 options", body: "Your hand:\nQ♠J♠\n\nBoard:\nK♥9♦2♣\n\nEvery street you choose:\n• Fold — give up your hand\n• Check — pass (no bet facing you)\n• Call — match the current bet\n• Raise — increase the bet" },
+        { type: "mcq", q: "No one has bet yet. It's your turn. Which action is NOT available?", opts: ["Check", "Call", "Fold"], a: 1, why: "You can only Call when there's a bet to match. With no bet, your options are Check, Bet (raise), or Fold." },
+        { type: "info", heading: "When a street ends", body: "Board after bets equalize:\nA♠7♣2♦\n\nA betting street ends when all remaining players have put in equal chips. Then the next community card is dealt, or showdown on the river." },
+        { type: "mcq", q: "You bet 50. Two players call. What happens next?", opts: ["Street ends — next card is dealt", "You bet again", "The player to your left acts again"], a: 0, why: "Once all players match the bet, the street is over and the next community card is dealt (or showdown if it's the river)." },
+        { type: "info", heading: "Showdown", body: "Board:\nA♠7♣2♦J♦9♥\n\nPlayer A:\nA♥K♦\n\nPlayer B:\nQ♠Q♦\n\nPair of aces beats pair of queens. Player A wins the pot." },
+        { type: "mcq", q: "Player A bets the river. Player B calls. What happens?", opts: ["Player A wins — they bet", "Showdown: best hand wins", "Player B wins — they called last"], a: 1, why: "A river call forces a showdown. Both players reveal cards and the best 5-card hand wins — betting doesn't determine the winner." },
+      ]},
+      { id: "vocab-1", title: "Poker vocabulary", min: 3, xp: 30, steps: [
+        { type: "info", heading: "Stack & pot", body: "Your hand:\nA♥K♥\n\nStack = your chip count. Pot = total chips in the hand.\nBig Blind (BB) = the standard unit.\n\nStack of 2,000 at 20 BB = 100bb deep. Always measure in BBs." },
+        { type: "mcq", q: "Blinds are 10/20. Your stack is 1,000 chips. How deep are you?", opts: ["10bb", "50bb", "100bb"], a: 1, why: "1,000 ÷ 20 = 50 big blinds. Always measure your stack in BBs — it's how every sizing decision is made." },
+        { type: "info", heading: "Preflop vocab", body: "Open (first raise):\nA♠K♠\n\n3-bet (re-raise the open):\nQ♥Q♣\n\n4-bet (re-raise the 3-bet):\nA♦A♣\n\nLimp = just calling the BB preflop (usually weak)." },
+        { type: "mcq", q: "UTG raises to 60. You raise to 180. What's your action called?", opts: ["An open", "A 3-bet", "A limp"], a: 1, why: "UTG's raise was the open (1st bet after blinds). Your re-raise is a 3-bet — the 3rd bet in the sequence." },
+        { type: "info", heading: "Postflop vocab", body: "You raised preflop:\nA♥K♦\n\nBoard (c-bet here):\nA♠7♣2♦\n\nC-bet = continuation bet — the preflop raiser bets the flop.\nEquity = your % chance of winning.\nNut hand = best possible hand on this board." },
+        { type: "mcq", q: "You raised preflop and bet the flop. This is called a…", opts: ["Donk bet", "C-bet (continuation bet)", "Probe bet"], a: 1, why: "A c-bet (continuation bet) is when the preflop aggressor bets the flop — one of the most common plays in poker." },
+        { type: "info", heading: "Key terms", body: "You hold:\nA♠K♠\n\nBoard:\nK♣Q♣8♣\n\nA♠ is a blocker — cuts opponent's nut flush combos.\nFold equity = how often a bet makes them fold.\nPot odds = the price you're being offered to call." },
+        { type: "mcq", q: "Your opponent's range is AA, KK, QQ — 18 combos. You hold A♠K♠. How many AA combos can they have now?", opts: ["6 combos", "3 combos", "0 combos"], a: 1, why: "AA normally has 6 combos. You hold A♠, so only 3 AA combos remain (AhAd, AhAc, AdAc). This is a blocker." },
+      ]},
+      { id: "first-1", title: "Your first decision", min: 4, xp: 30, steps: [
+        { type: "info", heading: "The setup", body: "Your hand on the Button:\nA♥K♦\n\nEveryone folds to you. Premium hand, best seat, zero information gap. What's the move?" },
+        { type: "mcq", q: "Button. A♥K♦. Everyone folded. Best play?", opts: ["Fold — wait for aces", "Limp (call the BB)", "Open raise to 2.5bb"], a: 2, why: "AK on the button is a premium hand in the best position. Always open-raise — win the pot now or play a big pot with positional advantage." },
+        { type: "info", heading: "Facing a 3-bet", body: "Your hand:\nA♥K♦\n\nBB re-raises (3-bets) to 9bb.\n\nAK flops top pair with top kicker and dominates most 3-bet ranges. Don't fold — that's a major mistake." },
+        { type: "mcq", q: "BB 3-bets to 9bb. You have AK on the Button. You should:", opts: ["Fold — they might have AA/KK", "4-bet or call — definitely don't fold", "Always fold AK to a 3-bet"], a: 1, why: "AK is too strong to fold to a 3-bet. 4-bet to build the pot with your premium, or call and use your position postflop." },
+        { type: "info", heading: "The flop", body: "Your hand:\nA♥K♦\n\nBoard:\nA♠7♣2♦\n\nTop pair, top kicker (TPTK) on a dry board. BB checks to you. Hands that call your bet: worse aces, sevens, any pair." },
+        { type: "mcq", q: "BB checks on A♠7♣2♦ with your A♥K♦. You should:", opts: ["Check back to trap", "Bet 60-70% pot", "Bet tiny (15%) to keep them in"], a: 1, why: "TPTK on a dry board = bet for value. Worse aces, sevens, and pairs all call. Checking risks free cards and misses value." },
+        { type: "info", heading: "The pattern", body: "Your hand:\nA♥K♦\n\nBoard:\nA♠7♣2♦\n\nStrong hand + best position + aggression = profit.\nThis hand shows the poker loop: enter with strength, use position, extract value." },
+        { type: "mcq", q: "Which combination makes the most money over time?", opts: ["Strong hand + out of position + passive", "Strong hand + in position + aggressive betting", "Any hand + in position + aggressive betting"], a: 1, why: "Strong hand + position + aggression is the winning formula. You get maximum value when you have the best cards and act with full information." },
+      ]},
+    ]
+  },
+  { id: "ch2", chapter: 2, title: "Preflop Foundations", suit: "♠", desc: "What to play, from where, and how to enter the pot",
+    modules: [
+      { id: "pre-1", title: "Starting hand discipline", min: 4, xp: 40, steps: [
+        { type: "info", heading: "Play fewer, better hands", body: "Play these:\nA♠A♦\n\nFold these:\n7♦2♠\n\nWinning 6-max players play ~22–26% of dealt hands. Most hands lose money — knowing which to ditch is the foundation." },
+        { type: "mcq", q: "You're UTG dealt 7♦2♠ — statistically the worst starting hand. Best play?", opts: ["Limp and see the flop cheap", "Fold immediately", "Open raise — any hand can win"], a: 1, why: "72 offsuit has terrible equity against any opponent and no drawing potential. Fold without hesitation." },
+        { type: "info", heading: "Position changes everything", body: "Button — open raise:\nK♦9♦\n\nUTG — fold:\nK♦9♦\n\nFrom the Button, 0 players act behind you. From UTG, 4 can punish you. Same hand, completely different value." },
+        { type: "mcq", q: "K♦9♦ from the Button: open raise. K♦9♦ from UTG: you should…", opts: ["Also open raise — it's suited", "Fold — too weak from early position", "Limp and see what happens"], a: 1, why: "K9s is a profitable button open. From UTG it's a loser — 4 players can hold KQ, KJ, KT, and dominate you preflop." },
+        { type: "info", heading: "The starter range", body: "Always playable:\nA♠A♦\n\nSuited aces:\nA♣5♣\n\nSuited connectors (late only):\n7♦6♦\n\nPlay from any position: pocket pairs, broadways, suited aces. Add suited connectors in late position." },
+        { type: "mcq", q: "Which hand should you fold from UTG?", opts: ["A♠A♦ (pocket aces)", "K♠Q♦ (broadway)", "8♦7♦ (suited connector)"], a: 2, why: "87s is a fine hand from the button or cutoff, but from UTG it's marginal — too many players behind to play a speculative hand profitably." },
+        { type: "mcq", q: "Q♠J♠ from the Cutoff. Best play?", opts: ["Fold — not a premium hand", "Open raise to 2.5bb", "Limp and hope to see a cheap flop"], a: 1, why: "QJs from the Cutoff is a standard open. It's a strong suited broadway that plays well in position and can make nut straights and flushes." },
+      ]},
+      { id: "pos-1", title: "Why the button prints money", min: 4, xp: 40, steps: [
+        { type: "info", heading: "Position = acting order", body: "Button's hand:\nK♦9♦\n\nBoard:\nK♥7♣2♠\n\nThe Button acts LAST on every postflop street. You see all checks, bets, and folds before deciding. More information = consistently better decisions." },
+        { type: "mcq", q: "Two players, identical hands. One is on the Button, one UTG. Who has the advantage?", opts: ["UTG — they set the agenda", "Button — they act last every street", "Neither — cards determine outcome"], a: 1, why: "The Button's positional advantage is structural, not hand-dependent. Last to act means better decisions on every street, every hand." },
+        { type: "info", heading: "What last-to-act buys you", body: "Board:\nJ♥8♦3♣\n\nYour hand (Button):\nA♠J♠\n\nOpponent checks to you. You can bet to take the pot OR check for a free card. Out of position, you'd have to act blind without this choice." },
+        { type: "mcq", q: "Opponent checks the flop to you on the Button. What extra option do you have vs. acting first?", opts: ["You can fold for free", "You can choose to bet OR take a free card — they can't raise you pre-bet", "You can see their hand"], a: 1, why: "Acting last lets you decide whether to bet for value, bluff, or take a free card after seeing their check. Out of position you have to act blind." },
+        { type: "info", heading: "Hand value shifts by seat", body: "Button — open raise:\nK♦9♦\n\nUTG — fold:\nK♦9♦\n\nPosition multiplies your hand's value. 0 players behind you on the Button; 4 can punish you from UTG." },
+        { type: "mcq", q: "Which seat should you play the MOST hands from?", opts: ["UTG — set the pace early", "Button — most hands profitable here", "Big Blind — you already invested"], a: 1, why: "The Button's positional advantage makes the widest range of hands profitable here. Tight early, loose on the button is the correct default." },
+        { type: "mcq", q: "You're in the Small Blind (acts FIRST postflop). Main disadvantage?", opts: ["You post a forced bet", "You act before everyone every postflop street", "You can't raise preflop"], a: 1, why: "The SB's key disadvantage is acting first every postflop street — you never see what opponents do before you have to commit. This is why SB is the hardest seat." },
+      ]},
+      { id: "pre-2", title: "Raise or fold", min: 3, xp: 40, steps: [
+        { type: "info", heading: "Kill the limp", body: "Raise this — don't limp:\nA♠J♠\n\nLimping caps your ways to win to ONE (best hand at showdown). Raising wins the pot IMMEDIATELY — a second way that limping eliminates." },
+        { type: "mcq", q: "UTG limps. MP limps. You're on the Button with A♠J♠. Best play?", opts: ["Limp along", "Raise to ~5bb", "Fold — too many players in"], a: 1, why: "AJs crushes limping ranges. Raise to 3bb + 1 per limper = 5bb. You build a pot in position with likely the best hand." },
+        { type: "info", heading: "Two ways to win", body: "Your hand:\nK♥Q♥\n\nRaising gives you initiative:\n1. Everyone folds → you win the pot now.\n2. Someone calls → you play as the aggressor with the lead.\n\nLimping gives you only option 2, without the lead." },
+        { type: "mcq", q: "What does 'having initiative' mean postflop?", opts: ["Having the most chips", "Being the last preflop aggressor — your bets are more credible", "Acting last on the flop"], a: 1, why: "Initiative means you were the last one to raise preflop. Your postflop bets represent strength that your opponent has to account for — passive players have no such threat." },
+        { type: "info", heading: "Standard sizing", body: "Your open:\nA♠Q♠\n\nOpen raise: 2–2.5bb in position, 2.5–3bb from early position.\nVs. limpers: 3bb + 1bb per limper.\n\nGoal: punish weak hands without being so large you only get called by better." },
+        { type: "mcq", q: "3 players limped before you on the Button with K♥Q♥. Correct raise size?", opts: ["2.5bb — standard open", "6bb — 3bb base + 3 limpers", "10bb — punish them hard"], a: 1, why: "vs limpers: 3bb + 1bb per limper = 6bb here. This punishes weak hands while keeping the pot manageable if a limper wakes up with a hand." },
+        { type: "mcq", q: "You're dealt J♦8♦ from UTG — too weak to open profitably. You should:", opts: ["Limp — it's suited so it's fine", "Open raise small", "Fold"], a: 2, why: "If a hand isn't strong enough to raise, it's not strong enough to limp either. The raise-or-fold default keeps your range strong and avoids tricky postflop spots." },
+      ]},
+      { id: "bb-1", title: "Defending your big blind", min: 4, xp: 40, steps: [
+        { type: "info", heading: "You're already in the pot", body: "Your BB hand:\nJ♦T♦\n\nSomeone raises to 3bb. Pot is ~4.5bb. You only need to call 2 more. That's a massive discount — defend wider than from any other seat." },
+        { type: "mcq", q: "UTG raises to 3bb. Pot is 4.5bb. You call 2bb more. What pot odds are you getting?", opts: ["About 2-to-1 (33% equity needed)", "About 3-to-1 (25% equity needed)", "Even money (50% needed)"], a: 0, why: "Call 2 to win 6.5 (4.5 + 2) = roughly 30% equity needed. The BB discount makes many otherwise-marginal hands profitable to defend." },
+        { type: "info", heading: "What to defend", body: "Defend:\n7♠6♠\n\nFold:\nJ♣3♠\n\nDefend any pair, suited hands, connected hands. Fold disconnected offsuit junk. Premiums (QQ+, AK): 3-bet, don't just call." },
+        { type: "mcq", q: "CO raises to 3bb. You're BB with 7♠6♠. Call or fold?", opts: ["Fold — weak hand", "Call — suited connector at a discount is profitable", "3-bet — show aggression"], a: 1, why: "76s has great implied odds and playability. At a big blind discount you have the equity to profitably see a flop and potentially win a big pot." },
+        { type: "mcq", q: "BTN raises to 2.5bb. You're BB with Q♦4♦. Call or fold?", opts: ["Call — suited queen gets a discount", "Fold — Q4 is too weak even in position... wait, you're out of position", "3-bet to take the pot"], a: 0, why: "Q4s in the BB vs a BTN steal is a standard defend. The discount + suit + blocker to QQ combos makes this marginally profitable to call." },
+        { type: "info", heading: "3-bet your premiums", body: "BB hand:\nA♥A♦\n\nButton steals to 2.5bb. 3-bet to 8–9bb — don't just call.\n\nFlat-calling premiums out of position is a common and expensive leak." },
+        { type: "mcq", q: "BTN steals to 2.5bb. You have A♥A♦ in the BB. Best play?", opts: ["Call — don't give away your hand strength", "Fold — aces play badly out of position", "3-bet to 8–9bb"], a: 2, why: "Aces want a big pot. 3-bet to 8-9bb builds value and puts pressure on the stealer. Flat-calling aces in the BB is a common and expensive mistake." },
+      ]},
+    ]
+  },
+  { id: "ch3", chapter: 3, title: "Postflop Basics", suit: "♣", desc: "Reading boards, drawing hands, and getting paid",
+    modules: [
+      { id: "post-1", title: "Betting for value", min: 5, xp: 50, steps: [
+        { type: "info", heading: "What is a value bet?", body: "Your hand:\nK♠Q♦\n\nBoard:\nK♥7♠2♣\n\nA value bet = you bet because you want to be called by a WORSE hand. KJ, K9, K8 all call your bet and lose to your KQ." },
+        { type: "mcq", q: "You have K♠Q♦ on K♥7♠2♣. Opponent checks. List a hand that calls your bet and loses:", opts: ["AA (beats you)", "KJ (worse king, loses to you)", "77 (set, beats you)"], a: 1, why: "KJ has a worse kicker than your KQ — it will call a bet and you win. That's the definition of a value bet target." },
+        { type: "info", heading: "Missing value hurts more than bad bluffs", body: "Your hand:\nA♠A♦\n\nBoard:\nA♥8♠4♣\n\nTop set — most players check 'to be safe.' Every check is money left on the table. Opponent gets a free card and you get nothing." },
+        { type: "mcq", q: "You have A♠A♦ on A♥K♠Q♣. Opponent checks to you. You should:", opts: ["Check — don't scare them away", "Bet 60% pot for value", "Bet tiny (20%) to keep them in"], a: 1, why: "Top set on a connected board needs to charge draws immediately. Check and a straight or flush gets there for free. Bet 60% — anyone with K, Q, or a draw will pay." },
+        { type: "info", heading: "Value sizing by texture", body: "Dry board:\nK♥7♦2♣\n\nBet 45–60% pot. Fewer draws, less urgency.\n\nWet board:\nJ♥T♦9♠\n\nBet 65–80% pot. Charge draws or they hit for free." },
+        { type: "mcq", q: "You have K♠K♦ on K♥7♣2♠ (dry board). What's the right value bet sizing?", opts: ["25% pot — keep them in", "50–60% pot", "100% pot — max value"], a: 1, why: "Dry board with top set: 50–60% extracts value from any pair or ace-high while keeping worse hands in. Overbetting on dry boards just folds out your customers." },
+        { type: "mcq", q: "You have Q♠J♠ making top two pair on Q♥J♦T♠ (wet board). Optimal bet?", opts: ["33% pot — don't scare draws", "70–80% pot — charge the draws", "Check — too scary a board"], a: 1, why: "Two pair on a wet board has to bet big immediately. K9, A9, 98, and flush draws all have significant equity — charge them. Checking or betting small is giving away money." },
+      ]},
+      { id: "post-2", title: "Reading board texture", min: 4, xp: 50, steps: [
+        { type: "info", heading: "Wet vs. dry", body: "Dry board:\nK♠7♦2♣\n\nFew draws, hits few hands. Small bets win most pots.\n\nWet board:\nJ♥T♥9♠\n\nMany draws, hits many hands. Bet big to charge them." },
+        { type: "mcq", q: "K♠7♦2♣ rainbow — wet or dry?", opts: ["Wet — three high cards", "Dry — disconnected, no flush draw, few straight draws"], a: 1, why: "K72 rainbow is a classic dry board. No flush draws, almost no straight draws. The preflop raiser's range dominates here." },
+        { type: "info", heading: "Outs — your equity in draws", body: "Your hand:\n8♦9♦\n\nBoard:\nK♦7♦2♠\n\nFlush draw = 9 outs (9 remaining diamonds)\nOpen-ended straight draw = 8 outs\nGutshot straight draw = 4 outs" },
+        { type: "mcq", q: "You have 8♦9♦ on K♦7♦2♠. How many outs do you have to the flush?", opts: ["4 outs", "9 outs", "13 outs"], a: 1, why: "There are 13 diamonds total. You hold 2 and 2 are on the board = 9 remaining diamonds are your outs to the flush." },
+        { type: "info", heading: "Rule of 4 and 2", body: "Flush draw:\n8♦9♦\n\nBoard:\nK♦7♦2♠\n\nFlush draw (9 outs):\n• Flop to river: 9 × 4 = ~36% equity\n• Turn to river: 9 × 2 = ~18% equity\n\nMultiply outs by 4 on flop, 2 on turn." },
+        { type: "mcq", q: "You have a gutshot (4 outs) on the flop. Approx equity to hit by the river?", opts: ["~8%", "~16%", "~32%"], a: 1, why: "4 outs × 4 = ~16% equity to the river. Gutshots are weak draws — you need good pot odds or implied odds to continue." },
+        { type: "mcq", q: "Turn card is the 8♠, completing a possible straight on J♠T♠8♦ board. This benefits:", opts: ["Anyone with a set — their hand improved", "Anyone holding Q9 or 96 — they just made a straight", "The preflop raiser — they always have the best hand"], a: 1, why: "When a straight completes on the turn, the players who hit it (Q9, 96) now have a very strong hand. Overpairs and sets need to be cautious." },
+      ]},
+      { id: "size-1", title: "Pot odds in five seconds", min: 4, xp: 50, steps: [
+        { type: "info", heading: "What are pot odds?", body: "Your hand:\n9♦8♦\n\nBoard:\nA♠7♣2♦\n\nPot odds = the price offered to call a bet.\nFormula: call ÷ (pot + call)\nIf your hand wins more often than this %, calling is profitable." },
+        { type: "mcq", q: "Pot is 100. Opponent bets 50. How much do you call to win the total pot?", opts: ["50 to win 150", "50 to win 200", "50 to win 100"], a: 1, why: "Pot 100 + bet 50 + your call 50 = 200 total pot. You call 50 to win 200. That's 50/200 = 25% equity needed." },
+        { type: "info", heading: "The 3 magic numbers", body: "Your flush draw:\nA♦7♦\n\nBoard:\nK♥9♦5♠\n\nMemorize:\n• Half-pot bet → need 25% equity\n• Two-thirds pot bet → need ~29% equity\n• Pot-sized bet → need 33% equity" },
+        { type: "mcq", q: "Pot is 200. Opponent bets 200 (pot-sized). What equity do you need to call profitably?", opts: ["25%", "33%", "50%"], a: 1, why: "Call 200 to win 600 total → 200/600 = 33%. Pot-sized bets always need 33% equity." },
+        { type: "info", heading: "Apply rule of 4 and 2", body: "Flush draw:\n8♦9♦\n\nBoard:\nK♦7♦2♠\n\nFlush draw (9 outs) = ~36% equity.\nFacing pot-sized bet = need 33%. 36 > 33 → CALL.\n\nGutshot (4 outs) = ~16%. vs half-pot = need 25%. 16 < 25 → FOLD." },
+        { type: "mcq", q: "Flush draw (9 outs, ~36% equity). Opponent bets two-thirds pot (you need 29%). Call or fold?", opts: ["Fold — 36 is barely more than 29", "Call — 36% equity > 29% needed", "Raise — punish them"], a: 1, why: "36% equity > 29% needed = profitable call. Pot odds math is that simple. Anytime your equity exceeds the required %, call." },
+        { type: "mcq", q: "Gutshot draw (4 outs, ~16% equity). Opponent bets pot (need 33%). Call or fold?", opts: ["Call — gutshots are sneaky", "Fold — 16% < 33% needed", "Raise to take the pot"], a: 1, why: "16% equity < 33% needed = fold. Unless you have significant implied odds (you'll win a huge pot when you hit), gutshots facing pot-sized bets are folds." },
+      ]},
+      { id: "size-2", title: "Sizing tells a story", min: 3, xp: 50, steps: [
+        { type: "info", heading: "Size = information", body: "Strong hand:\nA♠A♦\n\nBluff hand:\nQ♦5♦\n\nIf you size up only with monsters and down with bluffs, opponents read you easily. Consistent sizing by spot type, not hand strength, is the goal." },
+        { type: "mcq", q: "A player always bets 75%+ pot with strong hands and 25% as a 'block bet' when weak. How do you exploit this?", opts: ["Always call the big bets", "Fold to big bets, call small bets aggressively", "Ignore sizing — focus on your hand"], a: 1, why: "Once you spot a sizing tell, exploit it: fold to their big bets (they have it), and apply pressure on their small bets (they're weak)." },
+        { type: "info", heading: "Exploit vs. balance", body: "Value hand (bet large):\nK♠K♦\n\nBluff (size consistently):\nA♦6♦\n\nAgainst weak opponents: size up with value — they call based on their cards. Against tough players: consistent sizing keeps you balanced." },
+        { type: "mcq", q: "Facing a calling station who calls any bet, what's the most profitable adjustment?", opts: ["Bet small with everything to get more calls", "Bet big with your value hands, stop bluffing entirely", "Check more often to trap them"], a: 1, why: "Against calling stations, maximize your value bets (go bigger) and eliminate bluffs (they call those too and you lose). Simple, but very profitable." },
+        { type: "info", heading: "Board-based sizing", body: "Dry board:\nA♦8♣3♠\n\nC-bet 25–35% pot. Board strongly favors the raiser.\n\nWet board:\nK♥Q♥J♠\n\nC-bet 65–80% pot. Draws are valuable — charge them." },
+        { type: "mcq", q: "You c-bet A♦8♣3♠ rainbow as the preflop raiser. Correct sizing?", opts: ["25–33% pot", "66% pot", "100% pot"], a: 0, why: "Dry boards favor the raiser's range — a small c-bet folds out overcards and gutshots profitably, and keeps worse hands (pairs, ace-highs) in the pot." },
+      ]},
+    ]
+  },
+  { id: "ch4", chapter: 4, title: "Intermediate", suit: "♥", desc: "Ranges, bluffing, and playing complex situations",
+    modules: [
+      { id: "range-1", title: "Think in ranges, not hands", min: 5, xp: 60, steps: [
+        { type: "info", heading: "You can't know their cards", body: "You hold:\nA♥K♦\n\nUTG raises. What do they have?\nA♠A♣\n\n...or KK, QQ, AK — that's their RANGE. Every action they take narrows it. Thinking in ranges, not guesses, is the skill." },
+        { type: "mcq", q: "UTG raises preflop in 6-max. What can you say about their range?", opts: ["They could have anything", "Strong hands — pairs, broadways, suited aces. UTG plays tight.", "Exactly AA or KK"], a: 1, why: "UTG raises with a tight range because 4 players still act behind. Expect pairs, broadways, and strong suited hands — not random holdings." },
+        { type: "info", heading: "Actions prune the range", body: "Board:\nK♠7♦2♣\n\nOpponent called your flop c-bet, then donk-bet the turn:\nJ♠\n\nThis signals: K9 (two pair), 99 (set), or a big draw. Weak hands checked or folded. Actions narrow the range." },
+        { type: "mcq", q: "Opponent called your flop c-bet on K♠7♦2♣. Turn is 9♠. They donk-bet big. What does this represent?", opts: ["Any hand — they could have anything", "Strong hands: K9 (two pair), 99 (set), or a bluff with a draw", "Definitely a bluff"], a: 1, why: "A donk-bet (betting into the preflop raiser) on a turn after calling the flop usually represents two pair+, a draw, or an occasional bluff. Weak hands check-fold." },
+        { type: "info", heading: "Combos make it concrete", body: "You hold:\nA♠K♠\n\nOpponent's remaining AA:\nA♥A♦\n\nYou block A♠ → only 3 AA combos remain (not 6). If only AA beats you but they'd take this line with 30+ combos, you should call." },
+        { type: "mcq", q: "You hold A♠K♠. How many AA combos can your opponent have?", opts: ["6 combos", "3 combos — you hold the A♠", "0 combos — you have AK so they can't have AA"], a: 1, why: "AA has 6 combos normally (C(4,2)=6). You hold A♠, so only 3 AA combos remain: AhAd, AhAc, AdAc. You're a blocker to their strongest hand." },
+        { type: "mcq", q: "River jam. Opponent has 6 value combos that beat you and 14 bluff combos you beat. Pot-sized bet (33% needed). Call?", opts: ["Fold — 6 combos beat you", "Call — 14/20 combos = 70% equity, you only need 33%", "Raise"], a: 1, why: "14 of 20 combos are bluffs = 70% equity. You need only 33%. Range math makes this a clear call regardless of how scary the bet feels." },
+      ]},
+      { id: "bluff-1", title: "Bluff with a story", min: 4, xp: 60, steps: [
+        { type: "info", heading: "Bluffs need credibility", body: "Board:\n8♠6♠2♦\n\nYour bluff hand:\nA♠5♠\n\nA bluff works when your opponent believes you COULD have the hand you're representing. If the board doesn't fit your range, no one folds." },
+        { type: "mcq", q: "You raised preflop. Board: 8♠6♠2♦-K♠. You bet flop and barrel the K♠ turn. What story are you telling?", opts: ["You have a set of 8s or 6s", "You have a king or a spade flush — both fit your preflop raising range", "You're definitely bluffing"], a: 1, why: "As the preflop raiser, kings and flush draws belong to your range. Barreling on the K♠ turn is a credible story — your range hits this card hard." },
+        { type: "info", heading: "Bluff with blockers", body: "Board:\nK♠Q♠7♦\n\nBest bluff hand:\nA♠J♦\n\nA♠ blocks the nut flush — fewer opponent combos of the hand that would call you. No showdown value = must bluff or lose. Perfect setup." },
+        { type: "mcq", q: "On a K♠Q♠7♦ board, which hand is the best bluffing candidate?", opts: ["K♦T♦ (top pair — has showdown value)", "A♠J♦ (nut spade blocker, no showdown value)", "7♣6♣ (third pair, some showdown value)"], a: 1, why: "A♠J♦: blocks the nut flush (fewer combos calling you), has no showdown value (must bluff or lose), and represents a flush. Perfect bluff." },
+        { type: "info", heading: "Pick targets", body: "Bluff hand vs. a thinking player:\nT♠9♦\n\nNever bluff calling stations. They call with any pair. Your bluffs need fold equity to succeed — pick tight, thinking players who can actually fold." },
+        { type: "mcq", q: "Against a player who calls every single bet regardless of hand strength, you should:", opts: ["Bluff more — they'll eventually fold", "Stop bluffing, only value bet", "Bluff with bigger sizes to put more pressure"], a: 1, why: "Calling stations have no fold equity to offer. Bluffing them is just handing them chips. Only value bet, bet thinner than usual, and never bluff." },
+        { type: "mcq", q: "You've been caught bluffing twice this session. Correct adjustment?", opts: ["Keep bluffing — they'll stop expecting it", "Tighten up — value bet more, bluff less", "Bluff bigger to force folds"], a: 1, why: "Being caught bluffing twice means your opponents are now calling you lighter. Your 'bluff credibility' is damaged — shift to value betting mode until table dynamics reset." },
+      ]},
+      { id: "multi-1", title: "More players, different rules", min: 4, xp: 60, steps: [
+        { type: "info", heading: "Two rules change multiway", body: "Strong multiway hand:\nJ♠T♠\n\nBoard:\nJ♥T♦5♣\n\n1. DRAWS get more valuable — bigger pot = better odds.\n2. BLUFFS become near-impossible — every player must fold; one caller kills it." },
+        { type: "mcq", q: "A bluff that works 60% heads-up. Against 2 opponents (both independently decide), it succeeds approximately:", opts: ["60% — same as heads-up", "36% (0.6 × 0.6)", "20%"], a: 1, why: "Both opponents must fold independently. 60% × 60% = 36%. Each added opponent drastically reduces bluff success — multiway bluffs require very strong board coverage." },
+        { type: "info", heading: "The bar for hands rises", body: "3-way pot.\n\nBoard:\nJ♥T♠7♦\n\nYour hand:\nJ♠9♠\n\nHead-up, top pair is often best. Multiway, someone likely connected. Two pair or better is often needed to feel comfortable." },
+        { type: "mcq", q: "4-way pot. Flop: J♥T♠7♦. You have J♠9♠ (top pair + open-ender). Best approach?", opts: ["Bet big — you have top pair and a draw", "Proceed with caution — 3 other players likely have strong holdings or draws too", "Check-fold — too dangerous multiway"], a: 1, why: "J9 is strong but in a 4-way pot many hands connect with JT7 (Q9, K9, 98, 88, 77). Proceed, but don't play as if top pair is a monster." },
+        { type: "info", heading: "Pot odds improve multiway", body: "Your flush draw:\n9♦8♦\n\nBoard:\nK♦7♦2♠\n\nMore players = bigger pot = better odds for draws.\n3 players each put in 100 = 300 pot. A flush draw now has excellent pot odds." },
+        { type: "mcq", q: "3 players in (300 pot). Flop bet of 150. You have a flush draw (36% equity). Call or fold?", opts: ["Fold — 36% isn't enough", "Call — 150 to win 600 = 25% needed, you have 36%", "Only call heads-up, not multiway"], a: 1, why: "Call 150 to win 600 (300 pot + 150 bet + 150 call) = 25% equity needed. Your 36% flush draw equity is well above the required 25%." },
+      ]},
+      { id: "stack-1", title: "Short-stack push or fold", min: 4, xp: 60, steps: [
+        { type: "info", heading: "Under 15bb, simplify", body: "Short stack hand:\nJ♠J♦\n\nWith a short stack, standard poker breaks. Raising small then folding to a re-raise wastes chips. The right framework: shove all-in or fold. Nothing in between." },
+        { type: "mcq", q: "You have 12bb. UTG raises to 2.5bb. You have J♠J♦. Best play?", opts: ["Call — see the flop cheaply", "Raise to 5bb", "Shove all-in"], a: 2, why: "With 12bb and JJ, you're committed to the hand. Shoving immediately builds the pot and avoids an awkward spot where you raise then face a 3-bet. Shove and get your money in good." },
+        { type: "info", heading: "Why shoving works", body: "Short stack shove:\nA♠9♠\n\nShoving wins the pot immediately if everyone folds (which happens often). When called, you usually have 35–50% equity. Opponent needs a real hand to call." },
+        { type: "mcq", q: "You shove 10bb from the Button. The SB folds. The BB needs ~38% equity to call profitably. What does this mean for you?", opts: ["You should never shove — they always have the right odds", "The BB needs a real hand to call — weak hands like K5o or T8o are folds for them", "You need 62% equity to shove profitably"], a: 1, why: "Forcing opponents to need 38%+ equity to call means most of their range folds. Fold equity is the key advantage of short-stack shoves." },
+        { type: "info", heading: "Shove range by seat", body: "Button shove (widest):\nK♦7♠\n\nThe shorter your stack and the later your position, the wider you shove.\nButton at 10bb: shove ~35%. SB vs BB: shove up to 45%. UTG at 10bb: shove ~18%." },
+        { type: "mcq", q: "You have 8bb in the SB. BB is the only player left. You hold K♦7♠. Correct play?", opts: ["Fold — K7o is weak", "Shove — K7o is a standard shove SB vs BB at 8bb", "Min-raise to 2bb"], a: 1, why: "K7o from the SB vs BB at 8bb is a clear shove. You have position on the BB, and K7o is well above the shove threshold at this stack depth." },
+        { type: "mcq", q: "You have 12bb on the Button. Dealt 3♠3♦. UTG folds to you. Best play?", opts: ["Fold — pairs play poorly short-stacked", "Open to 2.5bb", "Shove all-in"], a: 2, why: "33 at 12bb on the button is a standard shove. You're not raising small — shove or fold is the framework. 33 beats the calling range enough to make it +EV." },
+      ]},
+    ]
+  },
+  { id: "ch5", chapter: 5, title: "Advanced", suit: "♦", desc: "3-betting, blockers, river decisions, and exploitation",
+    modules: [
+      { id: "adv-1", title: "3-bet strategy", min: 5, xp: 75, steps: [
+        { type: "info", heading: "What is a 3-bet?", body: "Value 3-bet:\nA♠A♦\n\nBluff 3-bet:\nA♣5♣\n\nA 3-bet = re-raise over an open. Value: AA, KK, QQ, JJ, AK — want a large pot. Bluff: A5s, A4s, 76s — blockers + playability when called." },
+        { type: "mcq", q: "Why include A5s as a 3-bet bluff instead of something like T9s?", opts: ["A5s is stronger than T9s", "A5s blocks AA and AK combos — opponent less likely to have strong hands", "A5s has more outs"], a: 1, why: "A5s holds the ace, reducing AA and AK combos in opponent's range. Fewer strong hands = more fold equity. Plus A5s has backdoor nut flush draws when called." },
+        { type: "info", heading: "3-bet sizing", body: "IP 3-bet (Button):\nK♠K♦\n\nOOP 3-bet (BB):\nQ♥Q♣\n\nIn position: 3× the open.\nOut of position: 3.5–4× the open.\nLarger OOP — you'll play a bigger pot without positional advantage." },
+        { type: "mcq", q: "UTG opens to 3bb. You're on the BTN with KK. Best 3-bet size?", opts: ["6bb (2× the open)", "9bb (3× the open — standard IP)", "15bb (too large)"], a: 1, why: "In position, 3× the open is standard: 3 × 3bb = 9bb. Builds a pot with your premium while keeping in bluff-catchers and worse value hands." },
+        { type: "info", heading: "Facing a 3-bet", body: "You opened:\nK♠J♦\n\nOpponent 3-bets. Fold this.\n\nContinue with premiums (4-bet or call), best suited hands IP (call). Fold weak broadways, offsuit combos, marginal hands." },
+        { type: "mcq", q: "You opened K♠J♦ from CO. Button 3-bets to 9bb. You should:", opts: ["Call — KJ is strong enough", "Fold — KJo is too weak to continue vs a 3-bet", "4-bet — represent a monster"], a: 1, why: "KJo vs a button 3-bet is a fold. You're out of position with a hand that's dominated by AK, AJ, KQ, and all the pairs in a 3-bet range." },
+        { type: "mcq", q: "You 3-bet KK from the BTN vs UTG. UTG 4-bets. You should:", opts: ["Fold — they always have AA when they 4-bet", "5-bet shove or call — KK is too strong to fold", "Call and reassess the flop"], a: 1, why: "KK vs a 4-bet is a 5-bet shove or call. Folding KK preflop is almost always a mistake — you're only losing to AA (6 combos) and dominating everything else." },
+      ]},
+      { id: "adv-2", title: "Blockers & combinatorics", min: 5, xp: 75, steps: [
+        { type: "info", heading: "Combo counts are fixed", body: "Unpaired hand (16 combos total):\nA♠K♦\n\nPocket pair (6 combos):\nA♠A♦\n\nEvery unpaired hand: 16 combos. Suited: 4 combos. Pocket pairs: 6 combos. These never change." },
+        { type: "mcq", q: "How many total AK combos exist in a fresh deck?", opts: ["4 (only suited)", "12 (only offsuit)", "16 (4 suited + 12 offsuit)"], a: 2, why: "AK: 4 suited combos (AsKs, AhKh, AdKd, AcKc) + 12 offsuit combos = 16 total. Same as any other unpaired hand." },
+        { type: "info", heading: "Blockers reduce combos", body: "You hold:\nA♠K♠\n\nOpponent's remaining AA:\nA♥A♦\n\nYou hold A♠: their AA drops 6 → 3 combos. Their AK drops 16 → 12 combos. You 'block' their strongest hands." },
+        { type: "mcq", q: "You hold K♠. How many KK combos can your opponent have?", opts: ["6 — standard pair combos", "3 — you hold K♠, only K♥K♦, K♥K♣, K♦K♣ remain", "0 — you have a king so they can't"], a: 1, why: "KK normally = 6 combos. Holding K♠ eliminates all combos containing K♠ (K♠K♥, K♠K♦, K♠K♣). That leaves 3 combos." },
+        { type: "info", heading: "Nut blocker", body: "Board:\nK♣Q♣8♣\n\nYou hold:\nA♣\n\nThe A♣ = nut blocker. You hold it → opponent CANNOT have the nut flush. Perfect card to bluff with." },
+        { type: "mcq", q: "Board: K♣Q♣8♣. You hold A♣. How many nut flush combos does your opponent have?", opts: ["9 — one per remaining club", "0 — you hold the A♣, they can't have the nut flush", "4 — only suited combinations"], a: 1, why: "The nut flush on a club board requires the A♣ — which you hold. Zero nut flush combos for them. Perfect card to bluff with: you block their strongest calling hand." },
+        { type: "mcq", q: "Deciding whether to river bluff on a spade board. You hold A♠. This makes your bluff:", opts: ["Weaker — you might have the flush, not a bluff", "More credible — you block the nut flush, so they're less likely to have the best calling hand", "Irrelevant — blockers don't affect bluffing"], a: 1, why: "Holding A♠ means they're less likely to have the nut flush (the hand that comfortably calls your bluff). Fewer strong callers = your bluff succeeds more often." },
+      ]},
+      { id: "adv-3", title: "River decisions", min: 4, xp: 75, steps: [
+        { type: "info", heading: "No more cards", body: "Your hand:\nK♠Q♦\n\nBoard:\nK♥7♣2♠J♦9♥\n\nOn the river, hand values are frozen. The only question: bet for value, bluff, or check? Before betting: 'Can I name 2 worse hands that call?' If yes — bet." },
+        { type: "mcq", q: "You have second pair on the river. Opponent checks. Their range: 40% missed draws, 35% weak pairs, 25% top pair. Should you bet?", opts: ["No — second pair isn't strong enough", "Yes — you beat 75% of their range (missed draws + weak pairs)", "Only if you have the nuts"], a: 1, why: "You beat missed draws and weak pairs = 75% of their range. Betting extracts value from all those hands. Checking wins nothing from the missed draws." },
+        { type: "info", heading: "Thin value", body: "Your hand:\nJ♠9♦\n\nBoard:\nK♣Q♥8♦5♠2♣\n\nThin value = betting with a hand that beats SOME but not most of the range. Even at 40% equity, a correctly-sized bet is profitable over thousands of hands." },
+        { type: "mcq", q: "You have third pair on the river. Opponent has many busted draws in their range. Should you bet a small amount for thin value?", opts: ["No — third pair is never worth betting", "Yes — busted draws fold to any bet, so even thin value extracts chips", "Only if you have a backdoor draw"], a: 1, why: "Busted draws have zero showdown value — they fold to any bet. Third pair beats those hands. A small value bet extracts chips from a significant portion of their range." },
+        { type: "info", heading: "Hero calls", body: "Board:\nA♣K♦7♥5♠2♥\n\nYou hold:\nA♥J♠\n\nHero call = calling a big bet with a medium hand.\nProfit condition: bluff frequency > equity needed.\nPot-sized bet needs 33%. If they bluff >33% here, call." },
+        { type: "mcq", q: "River: pot 300, opponent bets 300 (pot-sized). You estimate they bluff 40% here. Call or fold?", opts: ["Fold — they might have the best hand", "Call — 40% bluff frequency > 33% equity needed", "Raise — put maximum pressure"], a: 1, why: "Pot-sized bet needs 33% equity. Opponent bluffs 40% of the time here. 40% > 33% → calling is profitable. The math overrules the fear of being wrong." },
+        { type: "mcq", q: "You missed your flush draw on the river. No showdown value. Opponent checks. Should you bluff?", opts: ["No — missed draws should never bluff", "Yes, IF you can represent a hand that fits your preflop range and the board run-out", "Only if the pot is huge"], a: 1, why: "Missed draws are prime bluffing hands — you have zero showdown value, so you must either bluff or give up. Bluff when you have a credible story and opponent has folding hands in their range." },
+      ]},
+      { id: "adv-4", title: "Exploitative play", min: 4, xp: 75, steps: [
+        { type: "info", heading: "GTO vs. exploitative", body: "GTO hand (balanced):\nA♠5♠\n\nValue hand (exploit):\nK♣K♦\n\nGTO = unexploitable, balanced play. Exploitative = maximizing profit vs. a SPECIFIC opponent's mistakes. At low stakes, exploit > GTO." },
+        { type: "mcq", q: "Your opponent calls 85% of your bets and never folds. Best adjustment?", opts: ["Bluff more — pressure will eventually work", "Stop bluffing entirely, value bet thinner hands", "Bet smaller to get more calls"], a: 1, why: "Calling stations have no fold equity to offer. Stop bluffing (they call those too). Value bet thin hands for 3 streets — even second pair gets 3 streets of value against them." },
+        { type: "info", heading: "Exploit the calling station", body: "Value bet 3 streets with:\nJ♠9♦\n\nBoard:\nJ♥8♣3♠\n\nAgainst a calling station:\n• Eliminate bluffs completely.\n• Value bet hands you'd normally check.\n• Go 3 streets with any made hand.\n• Size up your value bets." },
+        { type: "mcq", q: "A nit (overly tight player) folds to 75% of c-bets. Best flop adjustment?", opts: ["Check more often to induce bluffs", "C-bet almost every flop regardless of hand strength", "Only c-bet when you have top pair"], a: 1, why: "If they fold 75% of the time, every c-bet is immediately profitable. Bet any flop — even air. Their over-folding is money on the table." },
+        { type: "info", heading: "Exploit the nit", body: "Nit suddenly 3-bets:\nA♠A♣\n\nYour hand (fold):\nK♠Q♦\n\nSteal blinds constantly. 3-bet their opens freely. Fire multiple barrels. But fold the moment they raise — nits only raise with the nuts." },
+        { type: "mcq", q: "A tight player who almost never 3-bets suddenly 3-bets you. You have KQ. Best play?", opts: ["Call — KQ is strong enough", "Fold — nits only 3-bet premiums; KQ is almost certainly behind", "4-bet bluff — they're scared"], a: 1, why: "Nits' 3-bet range is extremely narrow (usually QQ+, AK). KQ is dominated by most of it. Fold without regret — they showed you what they have." },
+        { type: "mcq", q: "Long term at low stakes: GTO or exploitative play is more profitable?", opts: ["GTO — it can't be beaten", "Exploitative — opponents deviate so far from optimal that exploiting their mistakes beats any balanced approach", "Same — both break even"], a: 1, why: "GTO is optimal vs. optimal opponents. Against recreational and weak players who make systematic mistakes, exploiting those specific mistakes yields far higher profits than playing balanced." },
+      ]},
+    ]
+  },
 ];
 const MODULE_INDEX = {};
-LEARN.forEach((t) => t.modules.forEach((m) => (MODULE_INDEX[m.id] = { ...m, topic: t.topic })));
+LEARN.forEach((ch) => ch.modules.forEach((m) => (MODULE_INDEX[m.id] = { ...m, topic: ch.title })));
+
+const CURRICULUM_ORDER = LEARN.flatMap((ch) => ch.modules.map((m) => m.id));
+
+function getFrontier(progress) {
+  return CURRICULUM_ORDER.find((id) => !progress[id]) || null;
+}
+function isModuleLocked(moduleId, progress) {
+  if (UNLOCK_ALL_FOR_TESTING) return false;
+  const idx = CURRICULUM_ORDER.indexOf(moduleId);
+  if (idx <= 0) return false;
+  for (let i = 0; i < idx; i++) { if (!progress[CURRICULUM_ORDER[i]]) return true; }
+  return false;
+}
 
 /* ============================ UI ATOMS ============================ */
 function PlayingCard({ card, hidden, w = 38, deal }) {
   const h = w * 1.42;
   if (hidden || !card) {
     const backs = {
-      classic: `repeating-linear-gradient(135deg, #27483A 0 3px, #1B3A2D 3px 6px)`,
+      classic:        `repeating-linear-gradient(135deg, #27483A 0 3px, #1B3A2D 3px 6px)`,
       "back-crimson": `repeating-linear-gradient(135deg, #5A1F1C 0 3px, #3A1210 3px 6px)`,
-      "back-gold": `repeating-linear-gradient(45deg, #4A3A14 0 3px, #2E240C 3px 6px)`,
-      "back-royal": `repeating-radial-gradient(circle at 50% 50%, #2A2050 0 4px, #1A1432 4px 8px)`,
+      "back-gold":    `repeating-linear-gradient(45deg, #4A3A14 0 3px, #2E240C 3px 6px)`,
+      "back-jade":    `repeating-linear-gradient(135deg, #1A3D28 0 3px, #0E2618 3px 6px)`,
+      "back-royal":   `repeating-radial-gradient(circle at 50% 50%, #2A2050 0 4px, #1A1432 4px 8px)`,
+      "back-ocean":   `repeating-linear-gradient(135deg, #0F3040 0 3px, #071E2A 3px 6px)`,
     };
     return (
       <div style={{ width: w, height: h, borderRadius: w * 0.14, background: backs[COSMETICS.back] || backs.classic, border: `1.5px solid ${T.brassDim}`, boxShadow: "0 2px 5px rgba(0,0,0,.45)" }} />
@@ -1206,9 +1396,9 @@ function PlayingCard({ card, hidden, w = 38, deal }) {
   );
 }
 function Btn({ children, onClick, kind = "ghost", style, disabled }) {
-  const base = { padding: "12px 16px", borderRadius: 12, fontSize: 15, fontWeight: 600, border: "1px solid " + T.line, background: "transparent", color: T.card, opacity: disabled ? 0.4 : 1, transition: "transform .08s ease" };
+  const base = { padding: "12px 16px", borderRadius: 12, fontSize: 15, fontWeight: 600, border: "1px solid rgba(201,165,70,0.15)", background: "rgba(10,26,18,0.55)", color: T.card, opacity: disabled ? 0.4 : 1, transition: "transform .08s ease" };
   const kinds = {
-    primary: { background: T.brass, color: "#1B1505", border: "1px solid " + T.brass },
+    primary: { background: T.brass, color: "#1B1505", border: "1px solid " + T.brass, boxShadow: "0 4px 20px rgba(201,165,70,0.28)" },
     danger: { background: "transparent", color: T.bad, border: "1px solid rgba(224,113,107,.4)" },
     felt: { background: T.baize2, border: "1px solid " + T.line },
   };
@@ -1310,7 +1500,7 @@ function RatingBar({ value, delta, band }) {
           <b style={{ color: T.brass }}>Edge</b> rates the quality of your decisions, not whether you won or lost a hand. A correct fold that saves chips counts for you even in a pot you lost, and a lucky win with a bad call does not. It moves like a chess rating: beat tougher spots and it climbs. Most beginners start near 1000, and a solid winning player sits past 1500.
         </div>
       )}
-      <div style={{ height: 8, borderRadius: 4, background: "#0A1812", border: "1px solid " + T.line, position: "relative" }}>
+      <div style={{ height: 8, borderRadius: 4, background: "rgba(201,165,70,0.08)", border: "1px solid " + T.line, position: "relative" }}>
         <div style={{ height: "100%", width: `${pct}%`, borderRadius: 4, background: `linear-gradient(90deg, ${T.brassDim}, ${T.brass})`, transition: "width .6s ease" }} />
         {TIERS.slice(1).map(([m]) => (
           <div key={m} style={{ position: "absolute", left: `${((m - 400) / 2400) * 100}%`, top: 0, bottom: 0, width: 1, background: "rgba(201,165,70,.25)" }} />
@@ -1332,22 +1522,20 @@ function NavBar({ screen, go }) {
     { id: "profile", label: "Profile", glyph: "♥" },
   ];
   return (
-    <nav style={{ position: "fixed", bottom: 0, left: "max(0px, calc(50% - 220px))", right: "max(0px, calc(50% - 220px))", background: "rgba(8,18,13,.96)", borderTop: "1px solid " + T.line, backdropFilter: "blur(8px)", zIndex: 30 }}>
-      <div style={{ display: "flex", height: 52 }}>
-        {items.map((it) => {
-          const playScreens = ["play", "lobby", "review", "replay", "mpsetup", "mptable", "puzzle", "puzzlereview", "mpreview"];
-          const learnScreens = ["learn", "module"];
-          const on = it.id === "play" ? playScreens.includes(screen) : it.id === "learn" ? learnScreens.includes(screen) : screen === it.id;
-          const red = it.glyph === "♥" || it.glyph === "♦";
-          const glyphColor = on ? (red ? T.cordovan : T.brass) : (red ? "rgba(224,113,107,.7)" : "rgba(201,165,70,.72)");
-          return (
-            <button key={it.id} onClick={() => go(it.id)} aria-label={it.label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, background: "none", border: "none", color: on ? (red ? T.cordovan : T.brass) : T.mist, padding: 0 }}>
-              <div style={{ fontSize: it.glyph === "◈" ? 16 : 20, lineHeight: 1, color: glyphColor }}>{it.glyph}</div>
-              <div style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", fontWeight: on ? 700 : 500, color: on ? (red ? T.cordovan : T.brass) : T.mist }}>{it.label}</div>
-            </button>
-          );
-        })}
-      </div>
+    <nav className="gp" style={{ position: "fixed", bottom: 0, left: "max(0px, calc(50% - 220px))", right: "max(0px, calc(50% - 220px))", display: "flex", background: "rgba(8,18,13,0.72)", borderTop: "1px solid " + T.line, zIndex: 30 }}>
+      {items.map((it) => {
+        const playScreens = ["play", "lobby", "review", "replay", "mpsetup", "mptable", "puzzle", "puzzlereview", "mpreview"];
+        const learnScreens = ["learn", "module"];
+        const on = it.id === "play" ? playScreens.includes(screen) : it.id === "learn" ? learnScreens.includes(screen) : screen === it.id;
+        const red = it.glyph === "♥" || it.glyph === "♦";
+        const glyphColor = on ? (red ? T.cordovan : T.brass) : (red ? "rgba(224,113,107,.7)" : "rgba(201,165,70,.72)");
+        return (
+          <button key={it.id} onClick={() => go(it.id)} aria-label={it.label} style={{ flex: 1, padding: "10px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", background: "none", border: "none", color: on ? (red ? T.cordovan : T.brass) : T.mist }}>
+            <div style={{ fontSize: it.glyph === "◈" ? 16 : 20, lineHeight: 1, color: glyphColor }}>{it.glyph}</div>
+            <div style={{ fontSize: 10, marginTop: 3, letterSpacing: ".05em", textTransform: "uppercase", fontWeight: on ? 700 : 500, color: on ? (red ? T.cordovan : T.brass) : T.mist }}>{it.label}</div>
+          </button>
+        );
+      })}
     </nav>
   );
 }
@@ -1361,8 +1549,8 @@ const SEAT_POS = [
   { left: "93%", top: "28%" },
   { left: "91%", top: "68%" },
 ];
-function Seat({ p, idx, game, isHero, intro, actionLabel, showdownReady }) {
-  const acting = game.toAct === idx && game.street !== "result";
+function Seat({ p, idx, game, isHero, intro, actionLabel, showdownReady, staticLabel, thinking }) {
+  const acting = (game.toAct === idx && game.street !== "result") || thinking;
   const isBtn = game.button === idx;
   const showCards = isHero || (game.street === "result" && game.wentToShowdown && !p.folded && showdownReady);
   const won = game.winners && game.winners.some((w) => w.idx === idx);
@@ -1384,6 +1572,11 @@ function Seat({ p, idx, game, isHero, intro, actionLabel, showdownReady }) {
             <span className="mono" style={{ background: "rgba(20,17,15,0.97)", border: `1px solid ${T.line}`, borderRadius: 99, padding: "2px 8px", fontSize: 10, fontWeight: 600, color: T.card, whiteSpace: "nowrap", lineHeight: "16px", animation: "riqActionLabel 2s ease forwards" }}>{actionLabel.text}</span>
           </div>
         )}
+        {staticLabel && (
+          <div style={{ position: "absolute", top: -24, left: 0, right: 0, display: "flex", justifyContent: "center", pointerEvents: "none", zIndex: 10 }}>
+            <span className="mono" style={{ background: "rgba(14,10,6,0.96)", border: `1px solid ${staticLabel.color || T.line}`, borderRadius: 99, padding: "2px 9px", fontSize: 10, fontWeight: 700, color: staticLabel.color || T.card, whiteSpace: "nowrap", lineHeight: "17px", opacity: staticLabel.visible ? 1 : 0, transform: staticLabel.visible ? "translateY(0)" : "translateY(-5px)", transition: "opacity 0.35s ease, transform 0.35s ease", boxShadow: staticLabel.visible ? `0 0 8px ${staticLabel.color || T.line}44` : "none" }}>{staticLabel.text}</span>
+          </div>
+        )}
         <div style={{ fontSize: 11, fontWeight: 700, color: won ? T.brass : T.card }}>{p.name}{isBtn && <span style={{ color: T.brass }}> ⓓ</span>}</div>
         <div className="mono" style={{ fontSize: 11.5, color: p.allIn ? T.cordovan : T.mist }}>{p.allIn ? "ALL-IN" : p.stack.toLocaleString()}</div>
       </div>
@@ -1399,10 +1592,10 @@ function StrengthStrip({ hero, board, equity }) {
   const name = handName(hero, board);
   const pct = Math.round(equity * 100);
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, background: "linear-gradient(180deg, rgba(20,40,31,.95), rgba(12,28,21,.95))", border: "1px solid " + T.line, borderLeft: `4px solid ${T.brass}`, borderRadius: 12, padding: "9px 14px" }}>
+    <div className="gp" style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(10,26,18,0.72)", border: "1px solid " + T.line, borderLeft: `3px solid ${T.brass}`, borderRadius: 12, padding: "9px 14px" }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="serif" style={{ fontSize: 17, color: T.card, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
-        <div style={{ height: 5, borderRadius: 3, background: "#0A1812", marginTop: 5 }}>
+        <div style={{ height: 5, borderRadius: 3, background: "rgba(201,165,70,0.08)", marginTop: 5 }}>
           <div style={{ height: "100%", width: pct + "%", borderRadius: 3, background: pct > 60 ? T.good : pct > 35 ? T.brass : T.cordovan, transition: "width .5s ease" }} />
         </div>
       </div>
@@ -1514,7 +1707,7 @@ function PlayScreen({ game, setGame, equity, onHeroAct, onNextHand, onEndSession
 
       {/* Table */}
       <div style={{ position: "relative", flex: 1, minHeight: 330, margin: "4px 0" }}>
-        <div style={{ position: "absolute", inset: "7% 4%", borderRadius: "50%", background: COSMETICS.felt === "felt-midnight" ? `radial-gradient(ellipse at 50% 38%, #14233B, #0A1322 75%)` : `radial-gradient(ellipse at 50% 38%, ${T.baize2}, ${T.baize} 75%)`, border: `7px solid #2A2017`, boxShadow: `inset 0 0 40px rgba(0,0,0,.55), 0 0 0 2px ${T.brassDim}` }} />
+        <div style={{ position: "absolute", inset: "7% 4%", borderRadius: "50%", background: ({ "felt-midnight": `radial-gradient(ellipse at 50% 38%, #14233B, #0A1322 75%)`, "felt-burgundy": `radial-gradient(ellipse at 50% 38%, #2A1018, #180A10 75%)`, "felt-slate": `radial-gradient(ellipse at 50% 38%, #1A2030, #0E1520 75%)`, "felt-forest": `radial-gradient(ellipse at 50% 38%, #0F2015, #091510 75%)` })[COSMETICS.felt] || `radial-gradient(ellipse at 50% 38%, ${T.baize2}, ${T.baize} 75%)`, border: `7px solid #2A2017`, boxShadow: `inset 0 0 40px rgba(0,0,0,.55), 0 0 0 2px ${T.brassDim}` }} />
         {/* community cards + pot */}
         <div style={{ position: "absolute", left: "50%", top: "44%", transform: "translate(-50%,-50%)", textAlign: "center", zIndex: 4 }}>
           <div style={{ display: "flex", gap: 5, justifyContent: "center" }}>
@@ -1934,18 +2127,27 @@ function genShove(rng, level = 0.5) {
 }
 /* Module id -> exercise generator */
 const MODULE_GEN = {
-  "pre-1": (rng, lv) => puzzleOpen(rng, lv),
-  "pre-2": (rng, lv) => puzzleOpen(rng, lv),
-  "post-1": (rng, lv) => puzzleValue(rng, rng() < 0.7 ? true : undefined, lv),
-  "post-2": (rng, lv) => (rng() < 0.5 ? puzzleValue(rng, undefined, lv) : puzzleOdds(rng, undefined, lv)),
-  "bluff-1": (rng, lv) => puzzleValue(rng, false, lv),
-  "size-1": (rng, lv) => puzzleOdds(rng, undefined, lv),
-  "size-2": (rng, lv) => genSizing(rng, lv),
+  "hands-1": (rng, lv) => puzzleOpen(rng, lv),
+  "table-1": (rng, lv) => puzzleOpen(rng, lv),
+  "flow-1":  (rng, lv) => puzzleOpen(rng, lv),
+  "vocab-1": (rng, lv) => puzzleOdds(rng, undefined, lv),
+  "first-1": (rng, lv) => puzzleOpen(rng, lv),
+  "pre-1":   (rng, lv) => puzzleOpen(rng, lv),
+  "pre-2":   (rng, lv) => puzzleOpen(rng, lv),
+  "pos-1":   (rng, lv) => puzzleOpen(rng, lv),
+  "bb-1":    (rng, lv) => genBBDefend(rng, lv),
+  "post-1":  (rng, lv) => puzzleValue(rng, rng() < 0.7 ? true : undefined, lv),
+  "post-2":  (rng, lv) => (rng() < 0.5 ? puzzleValue(rng, undefined, lv) : puzzleOdds(rng, undefined, lv)),
+  "size-1":  (rng, lv) => puzzleOdds(rng, undefined, lv),
+  "size-2":  (rng, lv) => genSizing(rng, lv),
   "range-1": (rng, lv) => puzzleOdds(rng, rng() < 0.7 ? true : undefined, lv),
-  "pos-1": (rng, lv) => puzzleOpen(rng, lv),
+  "bluff-1": (rng, lv) => puzzleValue(rng, false, lv),
   "multi-1": (rng, lv) => genMultiway(rng, lv),
-  "bb-1": (rng, lv) => genBBDefend(rng, lv),
   "stack-1": (rng, lv) => genShove(rng, lv),
+  "adv-1":   (rng, lv) => puzzleOpen(rng, lv),
+  "adv-2":   (rng, lv) => puzzleOdds(rng, rng() < 0.5 ? true : undefined, lv),
+  "adv-3":   (rng, lv) => puzzleValue(rng, undefined, lv),
+  "adv-4":   (rng, lv) => (rng() < 0.5 ? puzzleValue(rng, undefined, lv) : puzzleOpen(rng, lv)),
 };
 function moduleExercise(modId, rng, lv) {
   return (MODULE_GEN[modId] || ((r, l) => genPuzzle(r, null, l)))(rng, lv);
@@ -2145,7 +2347,31 @@ function PuzzleScreen({ run, onResult, onNext, onExit, justCompleted }) {
   const [betAmt, setBetAmt] = useState(0);
   const [showWhy, setShowWhy] = useState(false);
   const [showRange, setShowRange] = useState(false);
+  const [labelsIn, setLabelsIn] = useState(false);
+  const [thinkingSeats, setThinkingSeats] = useState(new Set());
   useEffect(() => { setStageIdx(0); setAnswered(null); setStageGrades([]); setShowWhy(false); setShowRange(false); }, [run.idx]);
+  // Sequence: board cards deal in → villain "thinks" (pulse) → action label appears
+  useEffect(() => {
+    setLabelsIn(false);
+    setThinkingSeats(new Set());
+    const s = stages[stageIdx];
+    if (!s) return;
+    const boardLen = s.game.board.length;
+    const cardsDoneAt = boardLen === 0 ? 200 : 300 + (boardLen - 1) * 210 + 300; // last card done + settle
+    const timers = [];
+    // active villain seats for this stage
+    const villainSeats = s.game.players
+      .map((p, i) => ({ p, i }))
+      .filter(({ p, i }) => i !== 0 && !p.folded)
+      .map(({ i }) => i);
+    if (villainSeats.length > 0) {
+      timers.push(setTimeout(() => setThinkingSeats(new Set(villainSeats)), cardsDoneAt));
+      timers.push(setTimeout(() => { setThinkingSeats(new Set()); setLabelsIn(true); }, cardsDoneAt + 700));
+    } else {
+      timers.push(setTimeout(() => setLabelsIn(true), cardsDoneAt));
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [run.idx, stageIdx]); // eslint-disable-line
   const stage = stages[stageIdx];
   useEffect(() => {
     if (stage) setBetAmt(Math.round((potTotal(stage.game) * 0.66) / SB) * SB || BB * 3);
@@ -2156,6 +2382,30 @@ function PuzzleScreen({ run, onResult, onNext, onExit, justCompleted }) {
   const toCall = Math.max(0, g.currentBet - hero.bet);
   const pot = potTotal(g);
   const isLastStage = stageIdx >= stages.length - 1;
+
+  // Derive floating action labels from puzzle game state (what each villain already did)
+  const ACTION_COLOR = { BET: T.cordovan, RAISE: T.cordovan, "3-BET": T.bad, SHOVE: T.bad, CALL: T.brass, CHECK: T.mist };
+  const puzzleLabels = {};
+  g.players.forEach((p, i) => {
+    if (i === 0 || p.folded) return;
+    let text = null;
+    if (g.street === "preflop") {
+      if (p.bet > BB * 2.4) {
+        const bb = (g.button + 2) % 6;
+        const prevRaise = g.players.some((pp, ii) => ii !== 0 && ii !== i && pp.bet > BB * 2.4);
+        text = p.bet >= hero.stack ? "SHOVE" : prevRaise ? "3-BET" : "RAISE";
+      }
+    } else {
+      if (p.bet > 0) {
+        const activeBets = g.players.filter((pp, ii) => ii !== 0 && !pp.folded && pp.bet > 0);
+        const maxBet = Math.max(...activeBets.map((pp) => pp.bet));
+        text = p.bet === maxBet && activeBets.length <= 1 ? "BET" : p.bet === maxBet ? "RAISE" : "CALL";
+      } else {
+        text = "CHECK";
+      }
+    }
+    if (text) puzzleLabels[i] = { text, color: ACTION_COLOR[text] || T.card, visible: labelsIn };
+  });
   function answer(action, amount) {
     if (answered) return;
     let grade = stage.correct.includes(action) ? "correct" : (stage.alsoOk || []).includes(action) ? "ok" : "wrong";
@@ -2177,33 +2427,42 @@ function PuzzleScreen({ run, onResult, onNext, onExit, justCompleted }) {
     setAnswered(null);
     setStageIdx(stageIdx + 1);
   }
-  const finishRun = (run.mode === "daily" || run.mode === "firstrun") && run.idx >= run.list.length - 1;
+  const finishRun = run.mode === "daily" && run.idx >= run.list.length - 1;
   const rightCount = stageGrades.filter((x) => x !== "wrong").length;
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "calc(12px + env(safe-area-inset-top)) 12px 0" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
         <button onClick={onExit} style={{ background: "none", border: "1px solid " + T.line, color: T.mist, borderRadius: 8, padding: "5px 10px", fontSize: 12 }}>Exit</button>
         <span className="serif" style={{ fontSize: 16, color: T.brass }}>
-          {run.mode === "daily" ? "Daily drill" : run.mode === "firstrun" ? "Warm-up" : run.mode === "module" ? "Exercises" : "Spot trainer"}
+          {run.mode === "daily" ? "Daily drill" : run.mode === "module" ? "Exercises" : "Spot trainer"}
           {run.levelName ? <span style={{ fontSize: 11, color: T.faint, marginLeft: 6, textTransform: "uppercase", letterSpacing: ".08em" }}>{run.levelName}</span> : null}
         </span>
         <span className="mono" style={{ fontSize: 12, color: T.faint }}>
-          {run.mode === "daily" || run.mode === "firstrun" ? `${run.idx + 1}/${run.list.length}` : `#${run.idx + 1}`}
+          {run.mode === "daily" ? `${run.idx + 1}/${run.list.length}` : `#${run.idx + 1}`}
           {stages.length > 1 ? ` · ${stageIdx + 1}/${stages.length}` : ""}
         </span>
       </div>
       {/* Table: compressed to fixed height when feedback is showing so cards stay visible */}
-      <div key={"tbl" + run.idx + "-" + stageIdx} style={{ position: "relative", flex: answered ? "0 0 auto" : 1, height: answered ? 195 : undefined, minHeight: answered ? 195 : 300, margin: "4px 0" }}>
-        <div style={{ position: "absolute", inset: "7% 4%", borderRadius: "50%", background: `radial-gradient(ellipse at 50% 38%, ${T.baize2}, ${T.baize} 75%)`, border: `7px solid #2A2017`, boxShadow: `inset 0 0 40px rgba(0,0,0,.55), 0 0 0 2px ${T.brassDim}` }} />
+      <div key={"tbl" + run.idx + "-" + stageIdx} style={{ position: "relative", flex: answered ? "0 0 auto" : 1, height: answered ? 210 : undefined, minHeight: answered ? 210 : 300, margin: "4px 0" }}>
+        <div style={{ position: "absolute", inset: "7% 4%", borderRadius: "50%", background: ({ "felt-midnight": `radial-gradient(ellipse at 50% 38%, #14233B, #0A1322 75%)`, "felt-burgundy": `radial-gradient(ellipse at 50% 38%, #2A1018, #180A10 75%)`, "felt-slate": `radial-gradient(ellipse at 50% 38%, #1A2030, #0E1520 75%)`, "felt-forest": `radial-gradient(ellipse at 50% 38%, #0F2015, #091510 75%)` })[COSMETICS.felt] || `radial-gradient(ellipse at 50% 38%, ${T.baize2}, ${T.baize} 75%)`, border: `7px solid #2A2017`, boxShadow: `inset 0 0 40px rgba(0,0,0,.55), 0 0 0 2px ${T.brassDim}` }} />
         <div style={{ position: "absolute", left: "50%", top: "44%", transform: "translate(-50%,-50%)", textAlign: "center", zIndex: 4 }}>
+          {/* Street label */}
+          <div className="mono" style={{ fontSize: 9, color: T.brassDim, letterSpacing: ".18em", textTransform: "uppercase", marginBottom: 6 }}>
+            {STREET_LABEL[g.street] || g.street.toUpperCase()}
+          </div>
           <div style={{ display: "flex", gap: 5, justifyContent: "center" }}>
-            {[0, 1, 2, 3, 4].map((i) => g.board[i] ? <PlayingCard key={i} card={g.board[i]} w={40} deal={stageIdx > 0 && i === g.board.length - 1} /> : <div key={i} style={{ width: 40, height: 57, borderRadius: 6, border: "1.5px dashed rgba(201,165,70,.25)" }} />)}
+            {[0, 1, 2, 3, 4].map((i) => {
+              if (!g.board[i]) return <div key={i} style={{ width: 40, height: 57, borderRadius: 6, border: "1.5px dashed rgba(201,165,70,.25)" }} />;
+              const isNewCard = stageIdx > 0 && i === g.board.length - 1;
+              const delay = stageIdx === 0 ? 260 + i * 210 : isNewCard ? 350 : 0;
+              return <div key={i} style={{ animation: `riqDealIn .3s ease ${delay}ms both` }}><PlayingCard card={g.board[i]} w={40} /></div>;
+            })}
           </div>
           <div className="mono" style={{ marginTop: 8, fontSize: 14, color: T.brass, fontWeight: 600 }}>
             <span style={{ fontSize: 10, color: T.faint, letterSpacing: ".1em" }}>POT </span>{pot.toLocaleString()}
           </div>
         </div>
-        {g.players.map((p, i) => <Seat key={i} p={p} idx={i} game={g} isHero={i === 0} intro={stageIdx === 0} />)}
+        {g.players.map((p, i) => <Seat key={i} p={p} idx={i} game={g} isHero={i === 0} intro={stageIdx === 0} staticLabel={i !== 0 ? puzzleLabels[i] : null} thinking={thinkingSeats.has(i)} />)}
       </div>
       {answered ? (
         /* ── Bottom-sheet feedback: table stays visible above, cards never covered ── */
@@ -2212,7 +2471,7 @@ function PuzzleScreen({ run, onResult, onNext, onExit, justCompleted }) {
           const heroCode = hero.cards && hero.cards.length === 2 ? handCode(hero.cards[0], hero.cards[1]) : null;
           const reqEq = toCall > 0 ? toCall / (pot + toCall) : null;
           return (
-            <div className="fadeup" style={{ flex: 1, overflowY: "auto", background: "#0E2218", borderTop: `3px solid ${vColor}`, borderRadius: "16px 16px 0 0", padding: "14px 16px", paddingBottom: "calc(14px + env(safe-area-inset-bottom))" }}>
+            <div className="fadeup" style={{ flex: 1, overflowY: "auto", background: "rgba(8,22,14,0.96)", borderTop: `3px solid ${vColor}`, borderRadius: "16px 16px 0 0", padding: "14px 16px", paddingBottom: "calc(14px + env(safe-area-inset-bottom))" }}>
               {/* Header row: verdict + best-play chip */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <span className="serif" style={{ fontSize: 19, color: vColor }}>
@@ -2282,15 +2541,18 @@ function PuzzleScreen({ run, onResult, onNext, onExit, justCompleted }) {
                 <div style={{ fontSize: 12.5, color: T.good, marginBottom: 8, fontWeight: 700 }}>✓ Module complete, nice work.</div>
               )}
               <Btn kind="primary" onClick={!isLastStage ? continueStage : finishRun ? onExit : onNext} style={{ width: "100%", marginTop: 4 }}>
-                {!isLastStage ? "Continue the hand →" : run.mode === "firstrun" ? (run.idx >= run.list.length - 1 ? "Take your seat" : "Next") : run.mode === "daily" ? (run.idx >= run.list.length - 1 ? "Finish drill" : "Next puzzle") : "Next puzzle"}
+                {!isLastStage ? "Continue the hand →" : run.mode === "daily" ? (run.idx >= run.list.length - 1 ? "Finish drill" : "Next puzzle") : "Next puzzle"}
               </Btn>
             </div>
           );
         })()
       ) : (
         <>
-          <div key={"pr" + run.idx + "-" + stageIdx} style={{ background: T.baize2, border: "1px solid " + T.line, borderLeft: `4px solid ${T.brass}`, borderRadius: 12, padding: "10px 14px", marginBottom: 8, animation: stageIdx === 0 ? "riqFadeUp .4s ease 1.9s both" : "riqFadeUp .4s ease .3s both" }}>
-            <div style={{ fontSize: 13.5, color: T.card, lineHeight: 1.45 }}>{stage.prompt}</div>
+          <div key={"pr" + run.idx + "-" + stageIdx} style={{ background: "rgba(10,26,18,0.72)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)", border: "1px solid rgba(201,165,70,0.18)", borderTop: `2px solid ${T.brass}`, borderRadius: 14, padding: "12px 16px", marginBottom: 8, animation: stageIdx === 0 ? `riqFadeUp .4s ease ${(stage.game.board.length === 0 ? 900 : 1200 + stage.game.board.length * 180)}ms both` : "riqFadeUp .4s ease .3s both" }}>
+            <div className="mono" style={{ fontSize: 9, color: T.brassDim, letterSpacing: ".18em", textTransform: "uppercase", marginBottom: 7 }}>
+              {g.heroPos ? `${g.heroPos} · ` : ""}{(STREET_LABEL[g.street] || g.street).toUpperCase()} · Your action
+            </div>
+            <div style={{ fontSize: 14, color: T.card, lineHeight: 1.5 }}>{stage.prompt}</div>
           </div>
           <div style={{ padding: "4px 0 calc(14px + env(safe-area-inset-bottom))" }}>
             <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
@@ -2557,19 +2819,18 @@ const STREAK_MILESTONES = [
   [30, "Royal card back"],
 ];
 
-function StreakCard({ streak, streakDay, daily, trainerState }) {
+function StreakActivityCard({ streak, streakDay, daily, trainerState, profile, go, sessionHandCount }) {
   const todayStr = new Date().toISOString().slice(0, 10);
   const todayDone = daily.drill && daily.session;
   const shields = (trainerState && trainerState.shields) || 0;
   const DAY_ABBR = ["Su", "M", "T", "W", "Th", "F", "Sa"];
 
-  // Rolling last-7-days window
   const last7 = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(Date.now() - (6 - i) * 86400000);
     return { date: d.toISOString().slice(0, 10), label: DAY_ABBR[d.getDay()] };
   });
 
-  const isDone = (dateStr) => {
+  const isStreakDone = (dateStr) => {
     if (dateStr === todayStr) return todayDone;
     if (!streakDay || streak <= 0) return false;
     const diffDays = Math.round((new Date(streakDay) - new Date(dateStr)) / 86400000);
@@ -2580,9 +2841,58 @@ function StreakCard({ streak, streakDay, daily, trainerState }) {
   const msProgress = nextMs ? Math.min(1, streak / nextMs[0]) : 1;
   const daysToNext = nextMs ? nextMs[0] - streak : 0;
 
+  // Calendar state
+  const [drillDates, setDrillDates] = useState(null);
+  const [playDates, setPlayDates] = useState(null);
+  const now = new Date();
+  const year = now.getFullYear(), month = now.getMonth(), todayNum = now.getDate();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const ds = (d) => `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+
+  useEffect(() => {
+    const dDates = new Set();
+    for (let d = 1; d <= daysInMonth; d++) {
+      if (localStorage.getItem(`riq_daily_drill_${ds(d)}`) === "true") dDates.add(ds(d));
+    }
+    setDrillDates(dDates);
+    if (!profile) return;
+    (async () => {
+      const monthISO = `${year}-${String(month + 1).padStart(2, "0")}`;
+      const rows = await dbSelect("sessions", `user_id=eq.${profile.id}&hands_played=gt.0&select=started_at,hands_played&started_at=gte.${monthISO}-01T00:00:00`);
+      const byDate = {};
+      (rows || []).forEach((r) => {
+        const d = new Date(r.started_at);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        byDate[key] = (byDate[key] || 0) + (r.hands_played || 0);
+      });
+      setPlayDates(new Set(Object.entries(byDate).filter(([, h]) => h >= 10).map(([k]) => k)));
+    })();
+  }, [profile && profile.id]); // eslint-disable-line
+
+  const loaded = drillDates !== null && playDates !== null;
+  const todayKey = ds(todayNum);
+  const todayDrill = (drillDates?.has(todayKey)) || (daily?.drill ?? false);
+  const todayPlay = playDates?.has(todayKey) ?? false;
+  const todayHandsCount = todayPlay ? 10 : Math.min(sessionHandCount || 0, 10);
+  const todayFull = todayDrill && todayPlay;
+
+  let fullDays = 0;
+  if (loaded) {
+    for (let d = 1; d <= Math.min(todayNum, daysInMonth); d++) {
+      if (drillDates.has(ds(d)) && playDates.has(ds(d))) fullDays++;
+    }
+  }
+
+  const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
+  const totalCells = Math.ceil((firstDow + daysInMonth) / 7) * 7;
+  const cells = Array.from({ length: totalCells }, (_, i) => i - firstDow + 1);
+  const monthName = now.toLocaleString("en-US", { month: "long" });
+  const DULL = T.brassDim;
+  const VOID = "rgba(194,69,62,0.14)";
+
   return (
-    <div style={{ background: T.baize2, border: `1px solid ${todayDone ? "rgba(127,201,127,.35)" : T.line}`, borderRadius: 14, padding: "14px 16px", marginTop: 16, marginBottom: 4 }}>
-      {/* Header: streak number + today status */}
+    <div className="gp" style={{ background: T.baize2, border: `1px solid ${todayDone ? "rgba(127,201,127,.35)" : T.line}`, borderRadius: 14, padding: "14px 16px", marginTop: 16, marginBottom: 4 }}>
+      {/* Streak header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 7 }}>
           <span className="serif" style={{ fontSize: 34, lineHeight: 1, color: streak > 0 ? T.cordovan : T.faint }}>{streak}</span>
@@ -2605,24 +2915,13 @@ function StreakCard({ streak, streakDay, daily, trainerState }) {
       {/* 7-day dot chain */}
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
         {last7.map(({ date, label }, i) => {
-          const done = isDone(date);
+          const done = isStreakDone(date);
           const isToday = date === todayStr;
           const dotColor = done ? T.good : isToday ? T.brass : T.line;
           return (
             <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
-              <div style={{
-                width: 28, height: 28, borderRadius: "50%",
-                background: done ? (isToday ? T.good : "rgba(127,201,127,.22)") : "transparent",
-                border: `2px solid ${dotColor}`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                animation: isToday && !done ? "riqPulse 2s ease infinite" : "none",
-                transition: "background .3s, border-color .3s",
-              }}>
-                {done
-                  ? <span style={{ fontSize: 12, color: isToday ? T.baize : T.good, fontWeight: 700 }}>✓</span>
-                  : isToday
-                  ? <span style={{ fontSize: 8, color: T.brass }}>◆</span>
-                  : null}
+              <div style={{ width: 28, height: 28, borderRadius: "50%", background: done ? (isToday ? T.good : "rgba(127,201,127,.22)") : "transparent", border: `2px solid ${dotColor}`, display: "flex", alignItems: "center", justifyContent: "center", animation: isToday && !done ? "riqPulse 2s ease infinite" : "none", transition: "background .3s, border-color .3s" }}>
+                {done ? <span style={{ fontSize: 12, color: isToday ? T.baize : T.good, fontWeight: 700 }}>✓</span> : isToday ? <span style={{ fontSize: 8, color: T.brass }}>◆</span> : null}
               </div>
               <span style={{ fontSize: 9.5, color: isToday ? T.brass : done ? "#9AB3A4" : T.faint, fontWeight: isToday ? 700 : 400, letterSpacing: ".04em" }}>{label}</span>
             </div>
@@ -2630,104 +2929,24 @@ function StreakCard({ streak, streakDay, daily, trainerState }) {
         })}
       </div>
 
-      {/* Milestone progress bar */}
-      {nextMs ? (
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
-            <span style={{ fontSize: 11, color: T.mist }}>Next: {nextMs[1]}</span>
-            <span className="mono" style={{ fontSize: 10, color: T.brass }}>{daysToNext} day{daysToNext !== 1 ? "s" : ""} away</span>
-          </div>
-          <div style={{ height: 4, borderRadius: 2, background: "rgba(201,165,70,.1)", overflow: "hidden" }}>
-            <div style={{ height: "100%", borderRadius: 2, background: `linear-gradient(90deg, ${T.brassDim}, ${T.brass})`, width: `${msProgress * 100}%`, transition: "width .6s ease" }} />
-          </div>
-        </div>
-      ) : (
-        <div style={{ fontSize: 11, color: T.good, textAlign: "center" }}>All milestones unlocked ✓</div>
-      )}
-    </div>
-  );
-}
-
-function ActivityGrid({ profile, go, daily, sessionHandCount }) {
-  const [drillDates, setDrillDates] = useState(null);
-  const [playDates, setPlayDates] = useState(null);
-
-  const now = new Date();
-  const year = now.getFullYear(), month = now.getMonth(), todayNum = now.getDate();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const ds = (d) => `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-
-  useEffect(() => {
-    const dDates = new Set();
-    for (let d = 1; d <= daysInMonth; d++) {
-      if (localStorage.getItem(`riq_daily_drill_${ds(d)}`) === "true") dDates.add(ds(d));
-    }
-    setDrillDates(dDates);
-
-    if (!profile) return;
-    (async () => {
-      const monthISO = `${year}-${String(month + 1).padStart(2, "0")}`;
-      const rows = await dbSelect("sessions", `user_id=eq.${profile.id}&hands_played=gt.0&select=started_at,hands_played&started_at=gte.${monthISO}-01T00:00:00`);
-      const byDate = {};
-      (rows || []).forEach((r) => {
-        const d = new Date(r.started_at);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        byDate[key] = (byDate[key] || 0) + (r.hands_played || 0);
-      });
-      setPlayDates(new Set(Object.entries(byDate).filter(([, h]) => h >= 10).map(([k]) => k)));
-    })();
-  }, [profile && profile.id]); // eslint-disable-line
-
-  const loaded = drillDates !== null && playDates !== null;
-
-  let fullStreak = 0;
-  if (loaded) {
-    const todayFull = drillDates.has(ds(todayNum)) && playDates.has(ds(todayNum));
-    for (let d = todayFull ? todayNum : todayNum - 1; d >= 1; d--) {
-      if (drillDates.has(ds(d)) && playDates.has(ds(d))) fullStreak++;
-      else break;
-    }
-  }
-
-  const todayKey = ds(todayNum);
-  const todayDrill = (drillDates?.has(todayKey)) || (daily?.drill ?? false);
-  const todayPlay = playDates?.has(todayKey) ?? false;
-  const todayHandsCount = todayPlay ? 10 : Math.min(sessionHandCount || 0, 10);
-  const todayFull = todayDrill && todayPlay;
-
-  let fullDays = 0;
-  if (loaded) {
-    for (let d = 1; d <= Math.min(todayNum, daysInMonth); d++) {
-      if (drillDates.has(ds(d)) && playDates.has(ds(d))) fullDays++;
-    }
-  }
-
-  const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
-  const totalCells = Math.ceil((firstDow + daysInMonth) / 7) * 7;
-  const cells = Array.from({ length: totalCells }, (_, i) => i - firstDow + 1);
-  const monthName = now.toLocaleString("en-US", { month: "long" });
-
-  const DULL = T.brassDim;
-  const VOID = "rgba(194,69,62,0.14)";
-
-  return (
-    <div className="gp" style={{ marginTop: 14, marginBottom: 4, background: T.baize2, border: `1px solid ${T.line}`, borderRadius: 14, padding: "14px 16px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+      {/* Divider + calendar header */}
+      <div style={{ height: 1, background: T.line, margin: "4px 0 12px" }} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <span className="mono" style={{ fontSize: 10, color: T.mist, letterSpacing: ".1em", textTransform: "uppercase" }}>{monthName} {year}</span>
-        <span style={{ fontSize: 12, color: fullStreak > 0 ? T.brass : T.faint }}>
-          {fullStreak > 0
-            ? <>{fullStreak} day streak 🔥</>
-            : <span style={{ fontSize: 11 }}>Complete both today</span>}
+        <span style={{ fontSize: 11, color: fullDays > 0 ? T.brass : T.faint }}>
+          {loaded ? `${fullDays} full ${fullDays === 1 ? "day" : "days"}` : ""}
         </span>
       </div>
 
+      {/* Day-of-week labels */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 4 }}>
         {["M","T","W","T","F","S","S"].map((d, i) => (
           <div key={i} style={{ textAlign: "center", fontSize: 9, color: T.faint, fontWeight: 600 }}>{d}</div>
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+      {/* Calendar grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 14 }}>
         {cells.map((day, i) => {
           if (day < 1 || day > daysInMonth) return <div key={i} style={{ aspectRatio: "1" }} />;
           const isTodayCell = day === todayNum;
@@ -2736,10 +2955,8 @@ function ActivityGrid({ profile, go, daily, sessionHandCount }) {
           const hasDrill = loaded && drillDates.has(ds(day));
           const hasPlay = loaded && playDates.has(ds(day));
           const both = hasDrill && hasPlay;
-
           let s = { aspectRatio: "1", borderRadius: 5, boxSizing: "border-box", cursor: "default" };
           let onClick;
-
           if (isFuture) {
             s.border = "1px solid rgba(201,165,70,0.08)";
           } else if (isTodayCell) {
@@ -2748,54 +2965,50 @@ function ActivityGrid({ profile, go, daily, sessionHandCount }) {
               s.boxShadow = "0 0 10px 3px rgba(201,165,70,0.5), inset 0 1px 0 rgba(255,255,255,0.22)";
             } else if (hasDrill) {
               s.background = `linear-gradient(135deg, ${DULL} 50%, rgba(201,165,70,0.10) 50%)`;
-              s.border = `1.5px solid ${T.brass}`;
-              s.animation = "riqBeckon 2s ease-in-out infinite";
+              s.border = `1.5px solid ${T.brass}`; s.animation = "riqBeckon 2s ease-in-out infinite";
             } else if (hasPlay) {
               s.background = `linear-gradient(135deg, rgba(201,165,70,0.10) 50%, ${DULL} 50%)`;
-              s.border = `1.5px solid ${T.brass}`;
-              s.animation = "riqBeckon 2s ease-in-out infinite";
+              s.border = `1.5px solid ${T.brass}`; s.animation = "riqBeckon 2s ease-in-out infinite";
             } else {
-              s.background = "rgba(201,165,70,0.08)";
-              s.border = `1.5px solid ${T.brass}`;
-              s.animation = "riqBeckon 2s ease-in-out infinite";
+              s.background = "rgba(201,165,70,0.08)"; s.border = `1.5px solid ${T.brass}`; s.animation = "riqBeckon 2s ease-in-out infinite";
             }
           } else if (isPast) {
             if (both) {
-              s.background = T.brass;
-              s.boxShadow = "0 0 8px 2px rgba(201,165,70,0.45), inset 0 1px 0 rgba(255,255,255,0.22)";
-              s.cursor = "pointer";
-              onClick = () => { localStorage.setItem("riq_log_jump", ds(day)); go("log"); };
+              s.background = T.brass; s.boxShadow = "0 0 8px 2px rgba(201,165,70,0.45), inset 0 1px 0 rgba(255,255,255,0.22)";
+              s.cursor = "pointer"; onClick = () => { localStorage.setItem("riq_log_jump", ds(day)); go("log"); };
             } else if (hasDrill && !hasPlay) {
-              s.background = `linear-gradient(135deg, ${DULL} 50%, ${VOID} 50%)`;
-              s.border = "1px solid rgba(194,69,62,0.22)";
-              s.animation = "riqMissed 3.2s ease-in-out infinite";
+              s.background = `linear-gradient(135deg, ${DULL} 50%, ${VOID} 50%)`; s.border = "1px solid rgba(194,69,62,0.22)"; s.animation = "riqMissed 3.2s ease-in-out infinite";
             } else if (hasPlay && !hasDrill) {
-              s.background = `linear-gradient(135deg, ${VOID} 50%, ${DULL} 50%)`;
-              s.border = "1px solid rgba(194,69,62,0.22)";
-              s.animation = "riqMissed 3.2s ease-in-out infinite";
+              s.background = `linear-gradient(135deg, ${VOID} 50%, ${DULL} 50%)`; s.border = "1px solid rgba(194,69,62,0.22)"; s.animation = "riqMissed 3.2s ease-in-out infinite";
             } else {
-              s.background = VOID;
-              s.border = "1px solid rgba(194,69,62,0.3)";
-              s.animation = "riqMissed 3.2s ease-in-out infinite";
+              s.background = VOID; s.border = "1px solid rgba(194,69,62,0.3)"; s.animation = "riqMissed 3.2s ease-in-out infinite";
             }
           }
-
           return <div key={i} onClick={onClick} style={s} />;
         })}
       </div>
 
-      <div style={{ marginTop: 10, fontSize: 11, color: T.faint, lineHeight: 1.6 }}>
-        {loaded ? (
-          <>
-            <span>{fullDays} full {fullDays === 1 ? "day" : "days"} this month</span>
-            {!todayFull && (
-              <span style={{ marginLeft: 8, color: T.mist }}>
-                {todayDrill ? "Drill ✓" : "Drill —"}{" · "}{todayPlay ? "Play ✓" : `Play ${todayHandsCount}/10`}
-              </span>
-            )}
-          </>
-        ) : null}
-      </div>
+      {/* Today's completion status */}
+      {loaded && !todayFull && (
+        <div style={{ fontSize: 11, color: T.mist, marginBottom: 10 }}>
+          {todayDrill ? "Drill ✓" : "Drill —"}{" · "}{todayPlay ? "Play ✓" : `Play ${todayHandsCount}/10`}
+        </div>
+      )}
+
+      {/* Milestone progress bar */}
+      {nextMs ? (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
+            <span style={{ fontSize: 11, color: T.mist }}>Next unlock: {nextMs[1]}</span>
+            <span className="mono" style={{ fontSize: 10, color: T.brass }}>{daysToNext} day{daysToNext !== 1 ? "s" : ""}</span>
+          </div>
+          <div style={{ height: 4, borderRadius: 2, background: "rgba(201,165,70,.1)", overflow: "hidden" }}>
+            <div style={{ height: "100%", borderRadius: 2, background: `linear-gradient(90deg, ${T.brassDim}, ${T.brass})`, width: `${msProgress * 100}%`, transition: "width .6s ease" }} />
+          </div>
+        </div>
+      ) : (
+        <div style={{ fontSize: 11, color: T.good, textAlign: "center" }}>All streak milestones unlocked ✓</div>
+      )}
     </div>
   );
 }
@@ -2821,7 +3034,7 @@ function HomeScreen({ user, sessions, lifetime, rating, go, streak, streakDay, d
       <div style={{ color: T.faint, fontSize: 13, marginTop: 4 }}>{lifetime.hands > 0 ? percentileLine(rating) : "A seat is open whenever you are."}</div>
 
       {/* stat strip: numerals as the hero, hairline dividers instead of three boxes */}
-      <div style={{ display: "flex", alignItems: "stretch", marginTop: 22, marginBottom: 4 }}>
+      <div data-tour="stat-strip" style={{ display: "flex", alignItems: "stretch", marginTop: 22, marginBottom: 4 }}>
         <StatChip label="Hands" value={lifetime.hands} />
         <div style={{ width: 1, background: T.line, margin: "4px 0" }} />
         <StatChip label="Edge" value={Math.round(rating)} accent={T.brass} />
@@ -2851,12 +3064,39 @@ function HomeScreen({ user, sessions, lifetime, rating, go, streak, streakDay, d
         </div>
       )}
 
-      <Btn kind="primary" onClick={() => go("lobby")} style={{ width: "100%", marginTop: 22, padding: "17px", fontSize: 17 }}>
-        ♠ &nbsp;Take a seat
-      </Btn>
+      <div data-tour="take-seat">
+        <Btn kind="primary" onClick={() => go("lobby")} style={{ width: "100%", marginTop: 22, padding: "17px", fontSize: 17 }}>
+          ♠ &nbsp;Take a seat
+        </Btn>
+      </div>
 
-      <StreakCard streak={streak} streakDay={streakDay} daily={daily} trainerState={trainerState} />
-      <ActivityGrid profile={profile} go={go} daily={daily} sessionHandCount={sessionHandCount} />
+      {/* Daily chips goal */}
+      {(() => {
+        const today = new Date().toISOString().slice(0, 10);
+        const dailyChips = (trainerState && trainerState.daily_chips_date === today) ? (trainerState.daily_chips || 0) : 0;
+        const totalChips = (trainerState && trainerState.xp_chips) || 0;
+        const target = 100;
+        const pct = Math.min(dailyChips / target, 1);
+        const done = dailyChips >= target;
+        return (
+          <div style={{ marginTop: 18, marginBottom: 4, background: done ? "rgba(127,201,127,0.06)" : T.baize2, border: "1px solid " + (done ? "rgba(127,201,127,0.25)" : T.line), borderLeft: `3px solid ${done ? T.good : T.brass}`, borderRadius: 12, padding: "12px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span className="mono" style={{ fontSize: 10, color: done ? T.good : T.brass, letterSpacing: ".12em", textTransform: "uppercase" }}>🪙 Daily chips goal</span>
+              <span className="mono" style={{ fontSize: 10, color: done ? T.good : T.mist }}>{dailyChips}/{target}</span>
+            </div>
+            <div style={{ height: 5, borderRadius: 3, background: "rgba(201,165,70,0.1)", overflow: "hidden" }}>
+              <div style={{ width: `${pct * 100}%`, height: "100%", borderRadius: 3, background: done ? T.good : T.brass, transition: "width .5s ease" }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+              <span style={{ fontSize: 11, color: T.faint }}>Earn chips in lessons</span>
+              <span className="mono" style={{ fontSize: 11, color: T.brass }}>🪙 {totalChips.toLocaleString()} total</span>
+            </div>
+          </div>
+        );
+      })()}
+      <div data-tour="streak-card">
+        <StreakActivityCard streak={streak} streakDay={streakDay} daily={daily} trainerState={trainerState} profile={profile} go={go} sessionHandCount={sessionHandCount} />
+      </div>
 
       <SectionTitle>Daily</SectionTitle>
       <div style={{ display: "flex", gap: 7, marginBottom: 10 }}>
@@ -2895,7 +3135,7 @@ function HomeScreen({ user, sessions, lifetime, rating, go, streak, streakDay, d
 
       <SectionTitle right={<button onClick={() => go("log")} style={{ background: "none", border: "none", color: T.brass, fontSize: 12, padding: 0, whiteSpace: "nowrap" }}>All sessions →</button>}>Last session</SectionTitle>
       {last ? (
-        <button onClick={() => go("review")} style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.line, borderRadius: 12, padding: "16px 18px", color: T.card }}>
+        <button onClick={() => go("review")} className="gp" style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.line, borderRadius: 12, padding: "16px 18px", color: T.card }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
             <span className="serif" style={{ fontSize: 24, color: last.stats.net >= 0 ? T.good : T.bad }}>{last.stats.net >= 0 ? "+" : ""}{last.stats.net.toLocaleString()}</span>
             <span style={{ fontSize: 12, color: T.faint }}>{last.stats.hands} hands, tap to review</span>
@@ -2937,7 +3177,7 @@ function Lobby({ onStart, onPrivate, go, rating, progress }) {
       {BOT_TIERS.map((t) => {
         const unlocked = UNLOCK_ALL_FOR_TESTING || t.riq === 0 || rating >= t.riq || progress["tier-unlock-" + t.id];
         return (
-          <button key={t.id} disabled={!unlocked} onClick={() => unlocked && onStart(t)} style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + (unlocked ? T.brass : T.line), borderRadius: 14, padding: 16, color: T.card, marginBottom: 10, opacity: unlocked ? 1 : 0.5 }}>
+          <button key={t.id} disabled={!unlocked} onClick={() => unlocked && onStart(t)} className="gp" style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.line, borderLeft: unlocked ? `3px solid rgba(201,165,70,0.5)` : "3px solid rgba(94,122,107,0.2)", borderRadius: 14, padding: 16, color: T.card, marginBottom: 10, opacity: unlocked ? 1 : 0.45 }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span className="serif" style={{ fontSize: 18 }}>{"♠".repeat(t.id)} {t.name}</span>
               {!unlocked && <span className="mono" style={{ fontSize: 10, color: T.faint, border: "1px solid " + T.line, borderRadius: 6, padding: "2px 6px", height: "fit-content" }}>🔒 Edge {t.riq} or beat tier {t.id - 1}</span>}
@@ -2947,7 +3187,7 @@ function Lobby({ onStart, onPrivate, go, rating, progress }) {
         );
       })}
       <SectionTitle>With people</SectionTitle>
-      <button onClick={() => onPrivate()} style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.brass, borderRadius: 14, padding: 18, color: T.card, marginBottom: 12 }}>
+      <button onClick={() => onPrivate()} className="gp" style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.line, borderLeft: `3px solid rgba(201,165,70,0.45)`, borderRadius: 14, padding: 18, color: T.card, marginBottom: 12 }}>
         <span className="serif" style={{ fontSize: 19 }}>Private table</span>
         <div style={{ fontSize: 12.5, color: T.mist, marginTop: 5 }}>Real friends, one 6-digit code. The server deals, so nobody can peek at the deck. Every hand scores your decisions against how they actually play.</div>
       </button>
@@ -3092,7 +3332,7 @@ function ReviewScreen({ session, rating, band, go, openModule, openReplay, lifet
         </div>
       )}
       {handList.map((h, i) => (
-        <button key={h.handNo + "-" + i} onClick={() => openReplay(h)} style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.line, borderRadius: 14, padding: 12, marginBottom: 8, color: T.card }}>
+        <button key={h.handNo + "-" + i} onClick={() => openReplay(h)} className="gp" style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.line, borderRadius: 14, padding: 12, marginBottom: 8, color: T.card }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
               <span className="mono" style={{ fontSize: 11, color: T.faint, marginRight: 5 }}>#{h.handNo + 1}</span>
@@ -3188,164 +3428,728 @@ function ReplayScreen({ hand, back }) {
   );
 }
 /* ============================ LEARN & PROFILE ============================ */
-function LearnScreen({ progress, openModule, focusLeaks, onTrainer, ratingHistory, sessions }) {
+
+function LearnScreen({ progress, openModule, focusLeaks, onTrainer, ratingHistory, trainerState }) {
+  const [expandedId, setExpandedId] = React.useState(null);
   const recIds = (focusLeaks || []).map((l) => l.module);
+  const frontier = getFrontier(progress);
+  const totalModules = CURRICULUM_ORDER.length;
+  const doneTotal = CURRICULUM_ORDER.filter((id) => progress[id]).length;
+
   return (
     <div style={{ padding: "calc(24px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto" }}>
-      <div className="serif" style={{ fontSize: 27, color: T.card }}>Learn</div>
-      <div style={{ width: "100%", background: "rgba(201,165,70,.08)", border: "1px solid " + T.brass, borderRadius: 14, padding: 16, color: T.card, marginTop: 14 }}>
-        <div className="serif" style={{ fontSize: 20, color: T.brass }}>♠ Spot trainer</div>
-        <div style={{ fontSize: 12.5, color: T.mist, marginTop: 5 }}>
-          {(focusLeaks || []).length ? "Endless puzzles aimed at your leaks: " + focusLeaks.slice(0, 2).map((l) => l.title.toLowerCase()).join(", ") : "Endless decision puzzles on a real table. Play the spot, take the verdict."}
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          {[["easy", "Easy", "#8FA89B"], ["medium", "Medium", "#C5A880"], ["hard", "Hard", "#B87D78"]].map(([lv, label, col]) => (
-            <button key={lv} onClick={() => onTrainer(lv)} style={{ flex: 1, padding: "9px", borderRadius: 10, border: `1px solid ${col}26`, background: `${col}26`, color: col, fontWeight: 600, fontSize: 13 }}>{label}</button>
-          ))}
-        </div>
-        <div style={{ fontSize: 10.5, color: T.faint, marginTop: 8 }}>Medium adds crowded pots. Hard adds full multi-street hands and bet sizing.</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <div className="serif" style={{ fontSize: 27, color: T.card }}>Learn</div>
+        <span className="mono" style={{ fontSize: 12, color: T.faint }}>{doneTotal}/{totalModules} modules</span>
       </div>
 
-      {/* Progression: your Edge over time, the number you are here to grow. */}
-      <SectionTitle>Your progress</SectionTitle>
-      {(() => {
-        const hist = ratingHistory || [];
-        if (hist.length < 2) {
-          return (
-            <div style={{ background: T.baize2, border: "1px solid " + T.line, borderRadius: 14, padding: "20px 16px", textAlign: "center" }}>
-              <div className="serif" style={{ fontSize: 26, color: T.brass }}>{hist.length ? Math.round(hist[hist.length - 1]) : 1000}</div>
-              <div style={{ fontSize: 9.5, color: T.faint, textTransform: "uppercase", letterSpacing: ".12em", marginTop: 4 }}>Your Edge today</div>
-              <div style={{ fontSize: 12, color: T.mist, marginTop: 10, lineHeight: 1.5 }}>Play a few sessions and your Edge curve will appear here, so you can watch your decisions sharpen over time.</div>
-            </div>
-          );
-        }
-        const W = 320, H = 96, pad = 8;
-        const lo = Math.min(...hist) - 30, hi = Math.max(...hist) + 30;
-        const x = (i) => pad + (i / (hist.length - 1)) * (W - pad * 2);
-        const y = (v) => pad + (1 - (v - lo) / Math.max(1, hi - lo)) * (H - pad * 2);
-        const line = hist.map((v, i) => `${x(i)},${y(v)}`).join(" ");
-        const area = `${x(0)},${H - pad} ` + line + ` ${x(hist.length - 1)},${H - pad}`;
-        const cur = Math.round(hist[hist.length - 1]);
-        const start = Math.round(hist[0]);
-        const up = cur >= start;
-        const peak = Math.round(Math.max(...hist));
-        return (
-          <div style={{ background: T.baize2, border: "1px solid " + T.line, borderRadius: 14, padding: "16px 16px 14px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-              <div>
-                <span className="serif" style={{ fontSize: 30, color: T.card }}>{cur}</span>
-                <span className="mono" style={{ fontSize: 12, color: up ? T.good : T.bad, marginLeft: 8 }}>{up ? "▲" : "▼"} {Math.abs(cur - start)} all time</span>
-              </div>
-              <span style={{ fontSize: 9.5, color: T.faint, textTransform: "uppercase", letterSpacing: ".12em" }}>Your Edge</span>
-            </div>
-            <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: "block", height: 96 }} aria-label="Edge over time">
-              <defs>
-                <linearGradient id="edgeFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="rgba(201,165,70,.22)" />
-                  <stop offset="100%" stopColor="rgba(201,165,70,0)" />
-                </linearGradient>
-              </defs>
-              <polygon points={area} fill="url(#edgeFill)" />
-              <polyline points={line} fill="none" stroke={T.brass} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-              {hist.map((v, i) => i === hist.length - 1 ? <circle key={i} cx={x(i)} cy={y(v)} r="3" fill={T.brass} /> : null)}
-            </svg>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.line}` }}>
-              <div style={{ textAlign: "center", flex: 1 }}>
-                <div className="mono" style={{ fontSize: 15, color: T.card }}>{hist.length}</div>
-                <div style={{ fontSize: 9, color: T.faint, textTransform: "uppercase", letterSpacing: ".1em", marginTop: 2 }}>Sessions</div>
-              </div>
-              <div style={{ width: 1, background: T.line }} />
-              <div style={{ textAlign: "center", flex: 1 }}>
-                <div className="mono" style={{ fontSize: 15, color: T.brass }}>{peak}</div>
-                <div style={{ fontSize: 9, color: T.faint, textTransform: "uppercase", letterSpacing: ".1em", marginTop: 2 }}>Best</div>
-              </div>
-              <div style={{ width: 1, background: T.line }} />
-              <div style={{ textAlign: "center", flex: 1 }}>
-                <div className="mono" style={{ fontSize: 15, color: T.good }}>{casualPercentile(cur)}%</div>
-                <div style={{ fontSize: 9, color: T.faint, textTransform: "uppercase", letterSpacing: ".1em", marginTop: 2 }}>Percentile</div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {/* Overall progress bar */}
+      <div style={{ height: 4, borderRadius: 2, background: "rgba(201,165,70,0.08)", margin: "10px 0 18px" }}>
+        <div style={{ height: "100%", width: `${(doneTotal / totalModules) * 100}%`, background: T.brass, borderRadius: 2, transition: "width .5s" }} />
+      </div>
+
+      {/* Spot trainer */}
+      <div data-tour="spot-trainer" style={{ background: "rgba(201,165,70,.07)", border: "1px solid " + T.line, borderRadius: 14, padding: 16, color: T.card }}>
+        <div className="serif" style={{ fontSize: 18, color: T.brass }}>♠ Spot trainer</div>
+        <div style={{ fontSize: 12.5, color: T.mist, marginTop: 5 }}>
+          {(focusLeaks || []).length ? "Puzzles aimed at your leaks: " + focusLeaks.slice(0, 2).map((l) => l.title.toLowerCase()).join(", ") : "Endless decision puzzles on a real table. Play the spot, take the verdict."}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          {[["easy", "Easy"], ["medium", "Medium"], ["hard", "Hard"]].map(([lv, label]) => (
+            <button key={lv} onClick={() => onTrainer(lv)} style={{ flex: 1, padding: "9px", borderRadius: 10, border: `1px solid ${T.line}`, background: T.baize2, color: T.mist, fontWeight: 600, fontSize: 13 }}>{label}</button>
+          ))}
+        </div>
+        <div style={{ fontSize: 10.5, color: T.faint, marginTop: 8 }}>Medium adds crowded pots. Hard adds multi-street hands and bet sizing.</div>
+      </div>
+
+      {/* Leak recs */}
       {recIds.length > 0 && (
         <>
           <SectionTitle>Recommended for your leaks</SectionTitle>
           {recIds.map((id) => MODULE_INDEX[id] && (
-            <button key={id} onClick={() => openModule(id)} style={{ width: "100%", textAlign: "left", background: "rgba(194,69,62,.1)", border: "1px solid rgba(194,69,62,.35)", borderRadius: 12, padding: 13, marginBottom: 8, color: T.card }}>
-              <span style={{ fontSize: 14, fontWeight: 600 }}>{MODULE_INDEX[id].title}</span>
-              <span style={{ fontSize: 11.5, color: T.mist, display: "block", marginTop: 2 }}>{MODULE_INDEX[id].topic} · targets a leak from your last session</span>
+            <button key={id} onClick={() => openModule(id)} style={{ width: "100%", textAlign: "left", background: "rgba(194,69,62,.08)", border: "1px solid rgba(194,69,62,.3)", borderRadius: 12, padding: 13, marginBottom: 8, color: T.card, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{MODULE_INDEX[id].title}</div>
+                <div style={{ fontSize: 11.5, color: T.mist, marginTop: 2 }}>{MODULE_INDEX[id].topic} · targets a leak</div>
+              </div>
+              <span style={{ color: T.bad, fontSize: 13 }}>→</span>
             </button>
           ))}
         </>
       )}
-      {LEARN.map((t) => {
-        const done = t.modules.filter((m) => progress[m.id]).length;
+
+      {/* Chapter cards */}
+      <SectionTitle>Curriculum</SectionTitle>
+      {LEARN.map((ch, chIdx) => {
+        const doneMods = ch.modules.filter((m) => progress[m.id]).length;
+        const pct = ch.modules.length ? doneMods / ch.modules.length : 0;
+        const complete = doneMods === ch.modules.length;
+        const isChLocked = !UNLOCK_ALL_FOR_TESTING && chIdx > 0 && !LEARN[chIdx - 1].modules.every((m) => progress[m.id]);
+        const isExpanded = expandedId === ch.id;
+        const suitRed = ["♥", "♦"].includes(ch.suit);
+        const accentColor = suitRed ? T.cordovan : T.brass;
+
         return (
-          <div key={t.topic}>
-            <SectionTitle right={<span className="mono" style={{ fontSize: 11, color: T.faint }}>{done}/{t.modules.length}</span>}>
-              <span style={{ color: ["♥", "♦"].includes(t.suit) ? T.cordovan : T.brass }}>{t.suit}</span> {t.topic}
-            </SectionTitle>
-            <div style={{ height: 4, borderRadius: 2, background: "#0A1812", marginBottom: 10 }}>
-              <div style={{ height: "100%", width: `${(done / t.modules.length) * 100}%`, background: T.brass, borderRadius: 2, transition: "width .4s" }} />
-            </div>
-            {t.modules.map((m, i) => {
-              const locked = !UNLOCK_ALL_FOR_TESTING && i > 0 && !progress[t.modules[i - 1].id];
-              return (
-                <button key={m.id} disabled={locked} onClick={() => openModule(m.id)} style={{ width: "100%", textAlign: "left", background: T.baize2, border: "1px solid " + T.line, borderRadius: 12, padding: 13, marginBottom: 8, color: T.card, opacity: locked ? 0.45 : 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>{progress[m.id] ? "✓ " : ""}{m.title}</div>
-                    <div style={{ fontSize: 11.5, color: T.mist, marginTop: 2 }}>{m.min} min lesson + drill</div>
+          <div key={ch.id} style={{ marginBottom: 10 }}>
+            <button onClick={() => setExpandedId(isExpanded ? null : ch.id)}
+              style={{ width: "100%", textAlign: "left", background: isChLocked ? "rgba(10,26,18,0.35)" : T.baize2, border: "1px solid " + (isChLocked ? "rgba(201,165,70,0.07)" : T.line), borderRadius: isExpanded ? "14px 14px 0 0" : 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, opacity: isChLocked ? 0.65 : 1 }}>
+              <div style={{ width: 38, height: 38, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isChLocked ? "rgba(94,122,107,0.12)" : complete ? "rgba(127,201,127,.15)" : `${accentColor}15`, border: `1.5px solid ${isChLocked ? T.faint : complete ? T.good : accentColor}` }}>
+                {isChLocked
+                  ? <span style={{ fontSize: 15 }}>🔒</span>
+                  : complete
+                    ? <span style={{ fontSize: 15, color: T.good }}>✓</span>
+                    : <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: accentColor }}>{ch.chapter}</span>
+                }
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ fontSize: 15, fontWeight: 600, color: T.card }}>{ch.title}</span>
+                  <span className="mono" style={{ fontSize: 11, color: T.faint, flexShrink: 0, marginLeft: 8 }}>{doneMods}/{ch.modules.length}</span>
+                </div>
+                <div style={{ fontSize: 11.5, color: T.mist, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.desc}</div>
+                <div style={{ height: 3, borderRadius: 2, background: "rgba(201,165,70,0.08)", marginTop: 8 }}>
+                  <div style={{ height: "100%", width: `${pct * 100}%`, background: complete ? T.good : accentColor, borderRadius: 2, transition: "width .4s" }} />
+                </div>
+              </div>
+              <span style={{ color: T.faint, fontSize: 11, flexShrink: 0 }}>{isExpanded ? "▲" : "▼"}</span>
+            </button>
+
+            {isExpanded && (
+              <div style={{ background: "rgba(8,20,14,0.5)", border: "1px solid " + T.line, borderTop: "none", borderRadius: "0 0 14px 14px", overflow: "hidden" }}>
+                {isChLocked ? (
+                  <div style={{ padding: "20px 16px", textAlign: "center" }}>
+                    <div style={{ fontSize: 13.5, color: T.mist, lineHeight: 1.6 }}>
+                      Complete <span style={{ color: T.card, fontWeight: 600 }}>{LEARN[chIdx - 1].title}</span> to unlock this chapter.
+                    </div>
+                    {frontier && (
+                      <button onClick={() => openModule(frontier)}
+                        style={{ display: "inline-block", marginTop: 14, padding: "10px 22px", borderRadius: 10, background: "rgba(201,165,70,.12)", border: "1px solid " + T.line, color: T.brass, fontSize: 13, fontWeight: 600 }}>
+                        Continue where you left off →
+                      </button>
+                    )}
                   </div>
-                  <span style={{ color: T.faint }}>{locked ? "🔒" : "→"}</span>
-                </button>
-              );
-            })}
+                ) : (
+                  ch.modules.map((m, i) => {
+                    const mDone = !!progress[m.id];
+                    const mLocked = !UNLOCK_ALL_FOR_TESTING && i > 0 && !progress[ch.modules[i - 1].id];
+                    const isRec = recIds.includes(m.id);
+                    return (
+                      <button key={m.id} onClick={() => openModule(m.id)}
+                        style={{ width: "100%", textAlign: "left", background: isRec ? "rgba(194,69,62,.06)" : "transparent", border: "none", borderTop: "1px solid " + T.line, padding: "13px 16px", display: "flex", alignItems: "center", gap: 12, opacity: mLocked ? 0.42 : 1 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: mDone ? "rgba(127,201,127,.12)" : "rgba(201,165,70,.07)", border: `1px solid ${mDone ? T.good : T.line}` }}>
+                          <span style={{ fontSize: 12, color: mDone ? T.good : mLocked ? T.faint : T.mist }}>{mDone ? "✓" : mLocked ? "🔒" : i + 1}</span>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 600, color: mDone ? T.good : T.card }}>{m.title}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                            <span style={{ fontSize: 11, color: T.faint }}>{m.min} min{isRec ? " · targets a leak" : ""}</span>
+                            {mDone && (() => {
+                              const stars = (trainerState && trainerState.mastery && trainerState.mastery[m.id]) || 1;
+                              return (
+                                <span className="mono" style={{ fontSize: 10, color: stars >= 5 ? T.brass : T.brassDim, letterSpacing: 1 }}>
+                                  {"★".repeat(Math.min(stars, 5))}{"☆".repeat(Math.max(0, 5 - stars))}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                        {!mLocked && <span style={{ color: T.faint, fontSize: 12 }}>→</span>}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
         );
       })}
     </div>
   );
 }
-function ModuleScreen({ moduleId, back, progress, modStats, onExercises }) {
-  const m = MODULE_INDEX[moduleId];
-  const [tab, setTab] = useState("theory");
-  if (!m) return null;
-  const done = !!progress[moduleId];
-  const correct = (modStats && modStats.c) || 0;
-  const attempts = (modStats && modStats.n) || 0;
-  const lvl = 1 + Math.min(8, Math.floor(correct / 4));
-  const acc = attempts ? Math.round((correct / attempts) * 100) : null;
+
+function parseCardStr(s) {
+  if (!s || s.length < 2) return null;
+  const RANK_MAP = { A: 14, K: 13, Q: 12, J: 11, T: 10 };
+  const SUIT_MAP = { "♠": 0, "♥": 1, "♦": 2, "♣": 3 };
+  const r = RANK_MAP[s[0]] !== undefined ? RANK_MAP[s[0]] : parseInt(s[0], 10);
+  const suit = SUIT_MAP[s[1]];
+  if (!r || isNaN(r) || suit === undefined) return null;
+  return { r, s: suit };
+}
+
+function parseTextBlocks(text) {
+  const parts = text.split(/([AKQJT2-9][♠♥♦♣])/g);
+  const blocks = [];
+  let cardBuf = [];
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 1) {
+      const card = parseCardStr(parts[i]);
+      if (card) cardBuf.push(card);
+    } else {
+      const hasWords = /[a-zA-Z0-9]/.test(parts[i]);
+      if (cardBuf.length && hasWords) {
+        blocks.push({ type: "cards", cards: [...cardBuf] });
+        cardBuf = [];
+      }
+      if (parts[i]) {
+        let val = parts[i];
+        if (blocks.length && blocks[blocks.length - 1].type === "cards") {
+          val = val.replace(/^[\s.,;–—]+/, "");
+        }
+        if (val) blocks.push({ type: "text", value: val });
+      }
+    }
+  }
+  if (cardBuf.length) blocks.push({ type: "cards", cards: cardBuf });
+  return blocks;
+}
+
+function cardAutoWidth(count) {
+  const avail = 318;
+  const gap = 8;
+  const computed = Math.floor((avail - gap * (count - 1)) / count);
+  const caps = [0, 110, 130, 92, 74, 62, 52];
+  return Math.min(computed, caps[count] || 46);
+}
+
+function LessonContent({ text, isQuestion = false }) {
+  const blocks = parseTextBlocks(text);
+  const els = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    const next = blocks[i + 1];
+    const prev = blocks[i - 1];
+    if (block.type === "text") {
+      const isLabel = next && next.type === "cards" && /:\s*$/.test(block.value.trimEnd());
+      if (isLabel) {
+        const label = block.value.replace(/:\s*$/, "").replace(/\n/g, " ").trim();
+        els.push(
+          <div key={i} className="mono" style={{
+            fontSize: 9.5, color: T.brassDim, letterSpacing: ".16em", textTransform: "uppercase",
+            marginTop: i > 0 ? 24 : 0, marginBottom: 10,
+          }}>
+            {label}
+          </div>
+        );
+      } else {
+        const lines = block.value.split("\n");
+        els.push(
+          <div key={i} style={{
+            fontSize: isQuestion ? 19 : 15.5,
+            color: isQuestion ? T.card : "#c8ddd2",
+            lineHeight: isQuestion ? 1.55 : 1.85,
+            marginTop: (prev && prev.type === "cards") ? 18 : 0,
+          }}>
+            {lines.map((line, li) => (
+              <React.Fragment key={li}>{li > 0 && <br />}{line}</React.Fragment>
+            ))}
+          </div>
+        );
+      }
+    } else {
+      const w = cardAutoWidth(block.cards.length);
+      const afterLabel = prev && prev.type === "text" && /:\s*$/.test(prev.value.trimEnd());
+      els.push(
+        <div key={i} style={{
+          display: "flex", gap: 8, justifyContent: "center", alignItems: "flex-end",
+          margin: afterLabel ? "8px 0 4px 0" : "22px 0",
+          flexWrap: block.cards.length > 6 ? "wrap" : "nowrap",
+        }}>
+          {block.cards.map((card, ci) => <PlayingCard key={ci} card={card} w={w} />)}
+        </div>
+      );
+    }
+  }
+  return <>{els}</>;
+}
+
+function InlineRich({ text, size = 14 }) {
+  const parts = text.split(/([AKQJT2-9][♠♥♦♣])/g);
   return (
-    <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto" }}>
-      <button onClick={back} style={{ background: "none", border: "none", color: T.brass, fontSize: 13, padding: 0 }}>← Learn</button>
-      <div className="mono" style={{ fontSize: 11, color: T.faint, letterSpacing: ".08em", marginTop: 12 }}>{m.topic.toUpperCase()} · {m.min} MIN{done ? " · ✓ COMPLETE" : ""}</div>
-      <div className="serif" style={{ fontSize: 24, color: T.card, margin: "6px 0 14px" }}>{m.title}</div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        {[["theory", "Theory"], ["exercises", "Exercises"]].map(([t, l]) => (
-          <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid " + (tab === t ? T.brass : T.line), background: tab === t ? "rgba(201,165,70,.12)" : "transparent", color: tab === t ? T.brass : T.mist, fontWeight: 600, fontSize: 14 }}>{l}</button>
-        ))}
+    <>
+      {parts.map((part, i) => {
+        if (i % 2 === 1) {
+          const card = parseCardStr(part);
+          if (card) return (
+            <span key={i} style={{ display: "inline-block", verticalAlign: "middle", margin: "0 2px", position: "relative", top: -1 }}>
+              <PlayingCard card={card} w={size + 6} />
+            </span>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
+function ModuleScreen({ moduleId, back, progress, onExercises, openModule, onComplete, trainerState }) {
+  const m = MODULE_INDEX[moduleId];
+  const [stepIdx, setStepIdx] = React.useState(0);
+  const [mistakes, setMistakes] = React.useState(0);
+  const [picked, setPicked] = React.useState(null);
+  const [revealed, setRevealed] = React.useState(false);
+  const [finished, setFinished] = React.useState(false);
+  const [hearts, setHearts] = React.useState(3);
+  const [combo, setCombo] = React.useState(0);
+  const [peakCombo, setPeakCombo] = React.useState(0);
+  const [outOfHearts, setOutOfHearts] = React.useState(false);
+  // animation state
+  const [floatingChips, setFloatingChips] = React.useState([]);
+  const [heartBreaking, setHeartBreaking] = React.useState(-1);
+  const [wrongShakeIdx, setWrongShakeIdx] = React.useState(-1);
+  const [redFlash, setRedFlash] = React.useState(false);
+  const [comboMilestone, setComboMilestone] = React.useState(null);
+  const [screenShake, setScreenShake] = React.useState(false);
+  const [comboBounce, setComboBounce] = React.useState(false);
+  const [displayedChips, setDisplayedChips] = React.useState(0);
+  const [showParticles, setShowParticles] = React.useState(false);
+
+  // animate chip counter on completion
+  React.useEffect(() => {
+    if (!finished || !m) { setDisplayedChips(0); return; }
+    const steps2 = m.steps || [];
+    const mcq2 = steps2.filter((s) => s.type === "mcq").length;
+    const alreadyDone2 = !!progress[moduleId];
+    const xp2 = m.xp || 50;
+    const base2 = mistakes === 0 ? xp2 : Math.max(Math.round(xp2 * 0.6), Math.round(xp2 * (1 - mistakes / Math.max(mcq2, 1)) * 0.8));
+    const mult2 = peakCombo >= 5 ? 2.0 : peakCombo >= 3 ? 1.5 : 1.0;
+    const flawless2 = mistakes === 0 && !alreadyDone2;
+    const target = Math.round(base2 * mult2 * (flawless2 ? 1.5 : 1.0));
+    if (flawless2) setTimeout(() => setShowParticles(true), 300);
+    let frame;
+    const t0 = performance.now();
+    const dur = 950;
+    const tick = (now) => {
+      const p = Math.min((now - t0) / dur, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setDisplayedChips(Math.round(eased * target));
+      if (p < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [finished]); // eslint-disable-line
+
+  if (!m) return null;
+
+  if (isModuleLocked(moduleId, progress)) {
+    const frontier = getFrontier(progress);
+    const ch = LEARN.find((c) => c.modules.some((mod) => mod.id === moduleId));
+    const GLASS_LOCK = {
+      background: "rgba(10,26,18,0.68)",
+      backdropFilter: "blur(20px) saturate(150%)",
+      WebkitBackdropFilter: "blur(20px) saturate(150%)",
+      border: "1px solid rgba(201,165,70,0.16)",
+      boxShadow: "0 6px 28px rgba(0,0,0,0.38), inset 0 1px 0 rgba(201,165,70,0.08)",
+      borderRadius: 20,
+    };
+    return (
+      <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto", background: T.baize }}>
+        <button onClick={back} style={{ background: "none", border: "none", color: T.brass, fontSize: 13, padding: 0 }}>← Learn</button>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginTop: 36 }}>
+          <div style={{ ...GLASS_LOCK, padding: "36px 28px 32px", maxWidth: 340, width: "100%" }}>
+            <div style={{ fontSize: 44, marginBottom: 16 }}>🔒</div>
+            {ch && <div className="mono" style={{ fontSize: 10, color: T.faint, letterSpacing: ".1em", marginBottom: 8 }}>CHAPTER {ch.chapter} · {ch.title.toUpperCase()}</div>}
+            <div className="serif" style={{ fontSize: 24, color: T.card, marginBottom: 10 }}>{m.title}</div>
+            <div style={{ fontSize: 14, color: T.mist, lineHeight: 1.65, marginBottom: 28 }}>
+              You haven't reached this yet. Build your foundation and it unlocks naturally as you progress.
+            </div>
+            {frontier && (
+              <Btn kind="primary" onClick={() => openModule(frontier)} style={{ width: "100%" }}>
+                Continue where you left off →
+              </Btn>
+            )}
+          </div>
+        </div>
       </div>
-      {tab === "theory" && m.lesson.map((p, i) => <p key={i} style={{ fontSize: 14, color: "#D8E2DA", lineHeight: 1.65, marginBottom: 12 }}>{p}</p>)}
-      {tab === "exercises" && (
-        <>
-          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            <StatChip label="Level" value={lvl} accent={T.brass} />
-            <StatChip label="Correct" value={correct} />
-            <StatChip label="Accuracy" value={acc != null ? acc + "%" : "-"} />
+    );
+  }
+
+  const steps = m.steps || [];
+  const mcqSteps = steps.filter((s) => s.type === "mcq").length;
+  const step = steps[stepIdx];
+  const alreadyDone = !!progress[moduleId];
+
+  if (outOfHearts) {
+    return (
+      <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 24px", background: T.baize, position: "relative", overflow: "hidden" }}>
+        {/* entry red wash */}
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse at center, transparent 30%, rgba(194,69,62,0.22) 100%)" }} />
+        <div style={{
+          background: "rgba(10,26,18,0.68)", backdropFilter: "blur(20px) saturate(150%)", WebkitBackdropFilter: "blur(20px) saturate(150%)",
+          border: "1px solid rgba(224,113,107,0.35)", boxShadow: "0 0 40px rgba(194,69,62,0.18), 0 6px 28px rgba(0,0,0,0.45)",
+          borderRadius: 20, padding: "38px 28px", maxWidth: 340, width: "100%", textAlign: "center",
+          animation: "riqHeartbeatIn .55s cubic-bezier(.22,1,.36,1) both",
+        }}>
+          <div style={{ fontSize: 52, marginBottom: 14, display: "inline-block", animation: "riqHeartBreak .7s .1s ease forwards" }}>💔</div>
+          <div className="serif" style={{ fontSize: 28, color: T.bad, marginBottom: 8, marginTop: 8 }}>Out of hearts</div>
+          <div style={{ fontSize: 14, color: T.mist, lineHeight: 1.65, marginBottom: 28 }}>
+            Mistakes are how we learn. Take another run at it.
           </div>
-          <div style={{ background: T.baize2, border: "1px solid " + T.line, borderRadius: 14, padding: 14, marginBottom: 12 }}>
-            <div style={{ fontSize: 12.5, color: T.mist, lineHeight: 1.5 }}>
-              Endless table exercises, only on this topic. They get harder as you get better.
-            </div>
-            <div style={{ height: 6, borderRadius: 3, background: "#0A1812", margin: "10px 0 5px" }}>
-              <div style={{ height: "100%", width: `${Math.min(100, (correct / 5) * 100)}%`, borderRadius: 3, background: done ? T.good : T.brass, transition: "width .4s" }} />
-            </div>
-            <div style={{ fontSize: 11, color: T.faint }}>{done ? "Module complete, keep drilling to push the level." : `${Math.min(correct, 5)}/5 correct to complete this module`}</div>
+          <Btn kind="primary" onClick={() => {
+            setStepIdx(0); setMistakes(0); setPicked(null); setRevealed(false);
+            setFinished(false); setHearts(3); setCombo(0); setPeakCombo(0);
+            setOutOfHearts(false); setRedFlash(false); setScreenShake(false);
+            setFloatingChips([]); setComboMilestone(null);
+          }} style={{ width: "100%", marginBottom: 10 }}>
+            Try again →
+          </Btn>
+          <Btn onClick={back} style={{ width: "100%" }}>← Back to Learn</Btn>
+        </div>
+      </div>
+    );
+  }
+
+  if (finished || stepIdx >= steps.length) {
+    const stars = mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1;
+    const xp = m.xp || 50;
+    const baseEarned = mistakes === 0 ? xp : Math.max(Math.round(xp * 0.6), Math.round(xp * (1 - mistakes / Math.max(mcqSteps, 1)) * 0.8));
+    const multiplier = peakCombo >= 5 ? 2.0 : peakCombo >= 3 ? 1.5 : 1.0;
+    const flawless = mistakes === 0 && !alreadyDone;
+    const earned = Math.round(baseEarned * multiplier * (flawless ? 1.5 : 1.0));
+    const nextCurrIdx = CURRICULUM_ORDER.indexOf(moduleId) + 1;
+    const nextId = nextCurrIdx < CURRICULUM_ORDER.length ? CURRICULUM_ORDER[nextCurrIdx] : null;
+    const nextMod = nextId ? MODULE_INDEX[nextId] : null;
+    const starEmoji = ["★★★", "★★☆", "★☆☆"][3 - stars];
+    const mastery = (trainerState && trainerState.mastery && trainerState.mastery[moduleId]) || 0;
+    return (
+      <div style={{ padding: "calc(22px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", background: T.baize, position: "relative" }}>
+
+        {/* flawless particles */}
+        {showParticles && Array.from({ length: 16 }, (_, i) => {
+          const angle = (i / 16) * 2 * Math.PI;
+          const dist = 80 + (i % 4) * 35;
+          const px = Math.round(Math.cos(angle) * dist);
+          const py = Math.round(Math.sin(angle) * dist);
+          return (
+            <div key={i} style={{
+              position: "fixed", top: "42%", left: "50%",
+              width: i % 3 === 0 ? 8 : 5, height: i % 3 === 0 ? 8 : 5,
+              borderRadius: "50%", pointerEvents: "none", zIndex: 300,
+              background: i % 3 === 0 ? T.brass : i % 3 === 1 ? "#FFF8E7" : T.brassDim,
+              "--px": `${px}px`, "--py": `${py}px`,
+              animation: `riqGoldParticle 1.3s ${i * 55}ms cubic-bezier(.2,.8,.4,1) forwards`,
+            }} />
+          );
+        })}
+
+        <div style={{
+          background: "rgba(10,26,18,0.68)", backdropFilter: "blur(20px) saturate(150%)", WebkitBackdropFilter: "blur(20px) saturate(150%)",
+          border: `1px solid ${flawless ? "rgba(201,165,70,0.5)" : "rgba(201,165,70,0.16)"}`,
+          boxShadow: flawless ? "0 6px 28px rgba(0,0,0,0.38)" : "0 6px 28px rgba(0,0,0,0.38), inset 0 1px 0 rgba(201,165,70,0.08)",
+          borderRadius: 20, marginTop: 32, padding: "32px 28px 28px", width: "100%", maxWidth: 340,
+          animation: flawless ? "riqFlawlessBorder 2s .4s ease infinite" : "none",
+        }}>
+          {flawless && (
+            <div className="mono" style={{ fontSize: 10, letterSpacing: ".28em", color: T.brass, marginBottom: 14, textTransform: "uppercase", animation: "riqShimmer 1.8s ease infinite" }}>✦ Flawless ✦</div>
+          )}
+          <div style={{ fontSize: 52, letterSpacing: 4, color: T.brass, animation: "riqFadeUp .4s ease" }}>{starEmoji}</div>
+          <div className="serif" style={{ fontSize: 26, color: T.card, marginTop: 12, animation: "riqFadeUp .4s .1s ease both" }}>
+            {alreadyDone ? "Reviewed!" : flawless ? "Perfect run!" : "Complete!"}
           </div>
-          <Btn kind="primary" onClick={() => onExercises(moduleId)} style={{ width: "100%" }}>Start exercises →</Btn>
-        </>
+          <div style={{ fontSize: 14, color: T.mist, marginTop: 6, animation: "riqFadeUp .4s .15s ease both" }}>{m.title}</div>
+          {mastery > 0 && (
+            <div style={{ display: "flex", justifyContent: "center", gap: 4, marginTop: 10, animation: "riqFadeUp .4s .2s ease both" }}>
+              {[1,2,3,4,5].map((s) => (
+                <span key={s} style={{ fontSize: 12, color: s <= mastery ? T.brass : T.faint }}>★</span>
+              ))}
+            </div>
+          )}
+          {/* animated chip counter */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 20,
+            background: "rgba(201,165,70,0.10)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
+            border: "1px solid rgba(201,165,70,0.22)", borderRadius: 12, padding: "14px 28px",
+            animation: "riqFadeUp .5s .25s ease both",
+          }}>
+            <span style={{ fontSize: 16 }}>🪙</span>
+            <span style={{ fontSize: 30, fontWeight: 800, color: T.brass, fontFamily: "IBM Plex Mono, monospace", animation: "riqChipRoll .3s ease" }}>
+              +{displayedChips}
+            </span>
+            {multiplier > 1 && <span className="mono" style={{ fontSize: 12, color: T.brassDim }}>×{multiplier.toFixed(1)}</span>}
+          </div>
+          {(flawless || multiplier > 1) && (
+            <div className="mono" style={{ fontSize: 10, color: T.brassDim, marginTop: 7, letterSpacing: ".1em", animation: "riqFadeUp .4s .35s ease both" }}>
+              {peakCombo > 0 ? `${peakCombo}-COMBO` : ""}{peakCombo > 0 && flawless ? " + " : ""}{flawless ? "FLAWLESS BONUS" : ""}
+            </div>
+          )}
+          {mistakes > 0 && (
+            <div style={{ fontSize: 12, color: T.mist, marginTop: 12 }}>{mistakes} mistake{mistakes !== 1 ? "s" : ""} — keep drilling to sharpen it</div>
+          )}
+        </div>
+        <div style={{ width: "100%", maxWidth: 340, marginTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+          {nextMod && !isModuleLocked(nextId, progress) && (
+            <Btn kind="primary" onClick={() => openModule(nextId)} style={{ width: "100%" }}>
+              Next: {nextMod.title} →
+            </Btn>
+          )}
+          <Btn kind="felt" onClick={() => onExercises && onExercises(moduleId)} style={{ width: "100%" }}>
+            Keep drilling ↗
+          </Btn>
+          <Btn onClick={back} style={{ width: "100%" }}>
+            ← Back to Learn
+          </Btn>
+        </div>
+      </div>
+    );
+  }
+
+  const pct = steps.length > 0 ? stepIdx / steps.length : 0;
+
+  const advance = () => {
+    setPicked(null);
+    setRevealed(false);
+    if (stepIdx + 1 >= steps.length) {
+      const xp = m.xp || 50;
+      const baseEarned = mistakes === 0 ? xp : Math.max(Math.round(xp * 0.6), Math.round(xp * (1 - mistakes / Math.max(mcqSteps, 1)) * 0.8));
+      const multiplier = peakCombo >= 5 ? 2.0 : peakCombo >= 3 ? 1.5 : 1.0;
+      const flawless = mistakes === 0 && !alreadyDone;
+      const earned = Math.round(baseEarned * multiplier * (flawless ? 1.5 : 1.0));
+      if (onComplete) onComplete(moduleId, earned, alreadyDone);
+      setFinished(true);
+    } else {
+      setStepIdx((i) => i + 1);
+    }
+  };
+
+  const submitMCQ = (i) => {
+    if (revealed) return;
+    setPicked(i);
+    setRevealed(true);
+    if (i === step.a) {
+      const newCombo = combo + 1;
+      setCombo(newCombo);
+      setPeakCombo((p) => Math.max(p, newCombo));
+      // combo bounce badge
+      setComboBounce(true);
+      setTimeout(() => setComboBounce(false), 420);
+      // floating chip text — per-question estimate
+      const mult = newCombo >= 5 ? 2.0 : newCombo >= 3 ? 1.5 : 1.0;
+      const chipEst = Math.max(1, Math.round(((m.xp || 50) / Math.max(mcqSteps, 1)) * mult));
+      const fcId = Date.now();
+      setFloatingChips((fc) => [...fc, { id: fcId, amount: chipEst }]);
+      setTimeout(() => setFloatingChips((fc) => fc.filter((f) => f.id !== fcId)), 900);
+      // milestone overlays
+      if (newCombo === 3 || newCombo === 5 || newCombo === 10) {
+        const labels = { 3: "3× STREAK  🔥", 5: "ON FIRE  🔥🔥", 10: "UNSTOPPABLE  ⚡" };
+        setComboMilestone(labels[newCombo]);
+        setTimeout(() => setComboMilestone(null), 1500);
+      }
+    } else {
+      setMistakes((ms) => ms + 1);
+      setCombo(0);
+      const newHearts = hearts - 1;
+      setHearts(newHearts);
+      // wrong-answer shake on that button
+      setWrongShakeIdx(i);
+      setTimeout(() => setWrongShakeIdx(-1), 620);
+      // red vignette flash
+      setRedFlash(true);
+      setTimeout(() => setRedFlash(false), 520);
+      // heart break animation for the heart we just lost
+      setHeartBreaking(newHearts);
+      setTimeout(() => setHeartBreaking(-1), 620);
+      if (newHearts <= 0) {
+        setScreenShake(true);
+        setTimeout(() => setScreenShake(false), 520);
+        setTimeout(() => setOutOfHearts(true), 1200);
+      }
+    }
+  };
+
+  const qNum = steps.slice(0, stepIdx).filter((s) => s.type === "mcq").length + 1;
+  const isLast = stepIdx + 1 >= steps.length;
+
+  const GLASS = {
+    background: "rgba(10,26,18,0.68)",
+    backdropFilter: "blur(20px) saturate(150%)",
+    WebkitBackdropFilter: "blur(20px) saturate(150%)",
+    border: "1px solid rgba(201,165,70,0.16)",
+    boxShadow: "0 6px 28px rgba(0,0,0,0.38), inset 0 1px 0 rgba(201,165,70,0.08)",
+    borderRadius: 20,
+  };
+
+  const multiplierNow = combo >= 5 ? 2.0 : combo >= 3 ? 1.5 : 1.0;
+
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", paddingTop: "calc(env(safe-area-inset-top) + 12px)", background: T.baize, animation: screenShake ? "riqScreenShake .5s ease" : "none" }}>
+
+      {/* ── Red vignette flash on wrong answer ── */}
+      {redFlash && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, pointerEvents: "none", background: "radial-gradient(ellipse at center, transparent 35%, rgba(194,69,62,0.6) 100%)", animation: "riqRedFlash .52s ease forwards" }} />
       )}
+
+      {/* ── Combo milestone stamp ── */}
+      {comboMilestone && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 201, pointerEvents: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ position: "absolute", left: "50%", animation: "riqComboStamp 1.5s ease forwards", fontSize: 30, fontWeight: 800, letterSpacing: ".1em", color: T.brass, textShadow: `0 0 40px rgba(201,165,70,.9), 0 0 80px rgba(201,165,70,.5)`, fontFamily: "DM Serif Display, Georgia, serif", whiteSpace: "nowrap" }}>
+            {comboMilestone}
+          </div>
+        </div>
+      )}
+
+      {/* ── Floating chip texts ── */}
+      {floatingChips.map((fc) => (
+        <div key={fc.id} style={{ position: "fixed", top: "28%", left: "50%", transform: "translateX(-50%)", zIndex: 202, pointerEvents: "none", animation: "riqChipFloat .9s ease forwards", fontSize: 22, fontWeight: 800, color: T.brass, fontFamily: "IBM Plex Mono, monospace", textShadow: "0 0 24px rgba(201,165,70,.7)", whiteSpace: "nowrap" }}>
+          +{fc.amount} 🪙
+        </div>
+      ))}
+
+      {/* ── Progress header ── */}
+      <div style={{ padding: "0 20px 12px", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <button onClick={back} style={{ background: "none", border: "none", color: T.mist, fontSize: 20, padding: 0, lineHeight: 1, flexShrink: 0, opacity: 0.7 }}>✕</button>
+          <div style={{ flex: 1, height: 5, borderRadius: 3, background: "rgba(201,165,70,0.1)", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${pct * 100}%`, background: `linear-gradient(90deg, ${T.brassDim}, ${T.brass})`, borderRadius: 3, transition: "width .4s cubic-bezier(.4,0,.2,1)" }} />
+          </div>
+          {/* Hearts */}
+          <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+            {[0,1,2].map((i) => (
+              <span key={i} style={{
+                fontSize: 14,
+                display: "inline-block",
+                opacity: (i < hearts || i === heartBreaking) ? 1 : 0.18,
+                transition: i !== heartBreaking ? "opacity .25s" : "none",
+                animation: i === heartBreaking ? "riqHeartBreak .6s ease forwards" : "none",
+                transformOrigin: "center",
+              }}>❤️</span>
+            ))}
+          </div>
+          {/* Combo badge */}
+          {combo >= 2 && (
+            <div className="mono" style={{
+              fontSize: 10, fontWeight: 700,
+              color: combo >= 5 ? T.good : combo >= 3 ? T.brass : T.brassDim,
+              background: combo >= 5 ? "rgba(127,201,127,0.15)" : "rgba(201,165,70,0.15)",
+              border: `1px solid ${combo >= 5 ? "rgba(127,201,127,0.4)" : "rgba(201,165,70,0.3)"}`,
+              borderRadius: 10, padding: "2px 7px", flexShrink: 0, letterSpacing: ".08em",
+              display: "inline-block",
+              animation: comboBounce ? "riqComboBounce .42s ease" : "none",
+              transformOrigin: "center",
+            }}>
+              {combo}× {combo >= 5 ? "🔥" : ""}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── INFO STEP ── */}
+      {step.type === "info" && (
+        <div key={`i${stepIdx}`} style={{ flex: 1, overflowY: "auto", padding: "0 20px 20px", animation: "riqFadeUp .3s ease" }}>
+          <div style={{ ...GLASS, borderTop: "2px solid rgba(201,165,70,0.32)", padding: "26px 22px 28px", minHeight: "100%" }}>
+            <div className="mono" style={{ fontSize: 9.5, color: T.brassDim, letterSpacing: ".18em", textTransform: "uppercase", marginBottom: 16 }}>
+              {m.topic} · {m.title}
+            </div>
+            <div className="serif" style={{ fontSize: 30, color: T.card, lineHeight: 1.18, marginBottom: 26 }}>
+              {step.heading}
+            </div>
+            <div style={{ fontSize: 15.5, color: "#c8ddd2", lineHeight: 1.85 }}>
+              <LessonContent text={step.body} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MCQ STEP ── */}
+      {step.type === "mcq" && (
+        <div key={`q${stepIdx}`} style={{ flex: 1, overflowY: "auto", padding: "0 20px 20px", display: "flex", flexDirection: "column", gap: 12, animation: "riqFadeUp .3s ease" }}>
+
+          {/* Question glass panel */}
+          <div style={{ ...GLASS, padding: "20px 22px 22px" }}>
+            <div className="mono" style={{ fontSize: 9, color: T.faint, letterSpacing: ".18em", textTransform: "uppercase", marginBottom: 16 }}>
+              Question {qNum} of {mcqSteps}
+            </div>
+            <LessonContent text={step.q} isQuestion />
+          </div>
+
+          {/* Options */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            {step.opts.map((opt, i) => {
+              const isCorrect = i === step.a;
+              const isPicked = picked === i;
+              const showGreen = revealed && isCorrect;
+              const showRed = revealed && isPicked && !isCorrect;
+              const badgeCol = showGreen ? T.good : showRed ? T.bad : T.brass;
+              const optBg = showGreen ? "rgba(127,201,127,0.10)" : showRed ? "rgba(224,113,107,0.09)" : "rgba(10,26,18,0.60)";
+              const optBorder = showGreen ? "rgba(127,201,127,0.4)" : showRed ? "rgba(224,113,107,0.4)" : "rgba(201,165,70,0.14)";
+              return (
+                <button key={i} onClick={() => submitMCQ(i)} style={{
+                  width: "100%", textAlign: "left",
+                  background: optBg,
+                  backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
+                  border: `1px solid ${optBorder}`,
+                  boxShadow: showGreen ? "0 0 14px rgba(127,201,127,0.22), inset 0 1px 0 rgba(127,201,127,0.08)"
+                            : showRed   ? "0 0 14px rgba(224,113,107,0.18), inset 0 1px 0 rgba(224,113,107,0.06)"
+                                        : "inset 0 1px 0 rgba(201,165,70,0.05)",
+                  borderRadius: 16, padding: "15px 16px",
+                  display: "flex", alignItems: "center", gap: 14,
+                  transition: "background .22s, border-color .22s, box-shadow .22s",
+                  fontFamily: "inherit", cursor: "pointer",
+                  animation: wrongShakeIdx === i ? "riqWrongShake .6s ease" : "none",
+                }}>
+                  <span className="mono" style={{
+                    width: 30, height: 30, borderRadius: 15, flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: showGreen ? "rgba(127,201,127,0.18)" : showRed ? "rgba(224,113,107,0.15)" : "rgba(201,165,70,0.08)",
+                    border: `1.5px solid ${badgeCol}50`,
+                    fontSize: 12, fontWeight: 700, color: badgeCol,
+                    transition: "all .22s",
+                  }}>
+                    {["A","B","C"][i]}
+                  </span>
+                  <span style={{ flex: 1, fontSize: 14.5, color: T.card, lineHeight: 1.5 }}>
+                    <InlineRich text={opt} size={14} />
+                  </span>
+                  {showGreen && <span style={{ color: T.good, fontSize: 19, flexShrink: 0 }}>✓</span>}
+                  {showRed   && <span style={{ color: T.bad,  fontSize: 19, flexShrink: 0 }}>✗</span>}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Explanation panel */}
+          {revealed && (
+            <div style={{
+              background: picked === step.a ? "rgba(127,201,127,0.08)" : "rgba(224,113,107,0.08)",
+              backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
+              border: `1px solid ${picked === step.a ? "rgba(127,201,127,0.35)" : "rgba(224,113,107,0.35)"}`,
+              borderLeft: `3px solid ${picked === step.a ? T.good : T.bad}`,
+              borderRadius: 16, padding: "16px 18px",
+              boxShadow: `inset 0 1px 0 ${picked === step.a ? "rgba(127,201,127,0.06)" : "rgba(224,113,107,0.05)"}`,
+              animation: "riqFadeUp .24s ease",
+            }}>
+              <div className="mono" style={{ fontSize: 10, fontWeight: 700, color: picked === step.a ? T.good : T.bad, marginBottom: 8, letterSpacing: ".12em" }}>
+                {picked === step.a ? "✓  CORRECT" : "✗  NOT QUITE"}
+              </div>
+              {picked === step.a && combo >= 3 && (
+                <div className="mono" style={{ fontSize: 10, color: combo >= 5 ? T.good : T.brass, marginBottom: 6, letterSpacing: ".08em" }}>
+                  {combo}-STREAK · ×{multiplierNow.toFixed(1)} XP
+                </div>
+              )}
+              <div style={{ fontSize: 14, color: "#c8ddd2", lineHeight: 1.65 }}>
+                <InlineRich text={step.why} size={14} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Footer CTA ── */}
+      <div style={{
+        padding: "14px 20px", paddingBottom: "calc(14px + env(safe-area-inset-bottom))", flexShrink: 0,
+        borderTop: `1px solid rgba(201,165,70,0.12)`,
+        background: "rgba(8,18,13,0.75)",
+        backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
+      }}>
+        {(step.type === "info" || revealed) ? (
+          <Btn kind="primary" onClick={advance} style={{ width: "100%", fontSize: 16, padding: "17px", borderRadius: 16 }}>
+            {isLast ? (alreadyDone ? "Done reviewing" : "Complete!  ★") : step.type === "info" ? "Got it  →" : "Continue  →"}
+          </Btn>
+        ) : (
+          <div style={{ height: 56, borderRadius: 16, background: "rgba(201,165,70,0.04)", border: `1px solid rgba(201,165,70,0.10)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontSize: 13, color: T.faint }}>Choose an answer above</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -3362,7 +4166,7 @@ function TendencyStat({ label, value, raw, lo, hi, lowText, highText, okText }) 
     </div>
   );
 }
-function ProfileScreen({ user, rating, ratingHistory, sessions, progress, answers, lifetime, onSignOut, onDeleteAccount, tendencies, cosmetics, onCosmetic, trainer }) {
+function ProfileScreen({ user, rating, ratingHistory, sessions, progress, answers, lifetime, onSignOut, onDeleteAccount, tendencies, cosmetics, onCosmetic, trainer, go }) {
   const allStats = sessions.length ? sessions[sessions.length - 1].stats : null;
   const agg = { hands: lifetime.hands, net: lifetime.net };
   const modsDone = Object.keys(progress).length;
@@ -3391,8 +4195,18 @@ function ProfileScreen({ user, rating, ratingHistory, sessions, progress, answer
           <div style={{ fontSize: 12, color: T.faint }}>{tierOf(rating)} · {answers.exp || "Player"}</div>
         </div>
       </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 18, padding: "12px 16px", background: T.baize2, border: "1px solid " + T.line, borderRadius: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 22 }}>🪙</span>
+          <div>
+            <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: T.brass, lineHeight: 1 }}>{((trainer && trainer.xp_chips) || 0).toLocaleString()}</div>
+            <div style={{ fontSize: 11, color: T.mist, marginTop: 2 }}>chips earned</div>
+          </div>
+        </div>
+        {go && <button onClick={() => go("shop")} style={{ background: T.brass, color: "#1B1505", border: "none", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>Shop →</button>}
+      </div>
       <SectionTitle>Rating</SectionTitle>
-      <div style={{ background: T.baize2, border: "1px solid " + T.line, borderRadius: 14, padding: 16 }}>
+      <div className="gp" style={{ background: T.baize2, border: "1px solid " + T.line, borderRadius: 14, padding: 16 }}>
         <RatingBar value={rating} delta={sessions.length ? sessions[sessions.length - 1].ratingDelta : null} band={ratingBand(lifetime.hands)} />
         {pts && (
           <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ marginTop: 14, display: "block" }} aria-label="Rating history">
@@ -3446,9 +4260,13 @@ function ProfileScreen({ user, rating, ratingHistory, sessions, progress, answer
                 <>
                   <div style={{ fontSize: 11.5, color: T.faint, margin: "10px 0 6px" }}>Felt</div>
                   <div style={{ display: "flex", gap: 8 }}>
-                    {felts.map((f) => (
-                      <button key={f} onClick={() => onCosmetic("felt", f === "default" ? null : f)} style={{ flex: 1, padding: 9, borderRadius: 10, border: "1px solid " + (((cos.felt || null) === (f === "default" ? null : f)) ? T.brass : T.line), background: f === "felt-midnight" ? "#14233B" : T.baize, color: T.mist, fontSize: 12 }}>{f === "default" ? "Classic green" : "Midnight"}</button>
-                    ))}
+                    {felts.map((f) => {
+                      const feltBg = { default: T.baize, "felt-forest": "#0F2015", "felt-midnight": "#14233B", "felt-burgundy": "#2A1018", "felt-slate": "#1A2030" };
+                      const feltLabel = { default: "Classic", "felt-forest": "Forest", "felt-midnight": "Midnight", "felt-burgundy": "Burgundy", "felt-slate": "Slate" };
+                      return (
+                        <button key={f} onClick={() => onCosmetic("felt", f === "default" ? null : f)} style={{ flex: 1, padding: 9, borderRadius: 10, border: "1px solid " + (((cos.felt || null) === (f === "default" ? null : f)) ? T.brass : T.line), background: feltBg[f] || T.baize, color: T.mist, fontSize: 11 }}>{feltLabel[f] || f}</button>
+                      );
+                    })}
                   </div>
                 </>
               )}
@@ -3875,7 +4693,7 @@ function MiniCard({ r, s }) {
 function HandRankSheet({ onClose }) {
   return (
     <div onClick={onClose} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: "58px", zIndex: 28, background: "rgba(4,8,6,.6)", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-      <div onClick={(e) => e.stopPropagation()} className="fadeup" style={{ background: "#0E2218", borderTop: `1px solid ${T.brass}`, borderRadius: "18px 18px 0 0", maxHeight: "100%", overflowY: "auto", padding: "20px 18px 24px", maxWidth: 440, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+      <div onClick={(e) => e.stopPropagation()} className="fadeup gp" style={{ background: "rgba(8,22,14,0.88)", borderTop: `1px solid ${T.brass}`, borderRadius: "18px 18px 0 0", maxHeight: "100%", overflowY: "auto", padding: "20px 18px 24px", maxWidth: 440, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
           <div className="serif" style={{ fontSize: 23, color: T.card }}>Hand rankings</div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: T.brass, fontSize: 13 }}>Close</button>
@@ -3922,7 +4740,7 @@ function RangeSheet({ onClose }) {
   const ex = POS_EXPLAIN[pos];
   return (
     <div onClick={onClose} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: "58px", zIndex: 28, background: "rgba(4,8,6,.6)", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-      <div onClick={(e) => e.stopPropagation()} className="fadeup" style={{ background: "#0E2218", borderTop: `1px solid ${T.brass}`, borderRadius: "18px 18px 0 0", maxHeight: "100%", overflowY: "auto", padding: "20px 18px 24px", maxWidth: 440, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+      <div onClick={(e) => e.stopPropagation()} className="fadeup gp" style={{ background: "rgba(8,22,14,0.88)", borderTop: `1px solid ${T.brass}`, borderRadius: "18px 18px 0 0", maxHeight: "100%", overflowY: "auto", padding: "20px 18px 24px", maxWidth: 440, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
           <div className="serif" style={{ fontSize: 23, color: T.card }}>Opening ranges</div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: T.brass, fontSize: 13 }}>Close</button>
@@ -4419,7 +5237,7 @@ function LogScreen({ profile, go, openModule }) {
   useEffect(() => {
     if (!profile) return;
     (async () => {
-      const rows = await dbSelect("sessions", `user_id=eq.${profile.id}&select=id,started_at,ended_at,hands_played,net_chips,name,analysis_json&order=started_at.desc&limit=60`);
+      const rows = await dbSelect("sessions", `user_id=eq.${profile.id}&hands_played=gt.0&select=id,started_at,ended_at,hands_played,net_chips,name,analysis_json&order=started_at.desc&limit=60`);
       setSessions(rows || []);
     })();
   }, [profile && profile.id]); // eslint-disable-line
@@ -4633,11 +5451,156 @@ function LogScreen({ profile, go, openModule }) {
 
       {selectedHand && (
         <div onClick={() => setSelectedHand(null)} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(4,10,7,.78)", display: "flex", alignItems: "flex-end" }}>
-          <div onClick={(e) => e.stopPropagation()} className="fadeup" style={{ width: "100%", maxWidth: 480, margin: "0 auto", background: "#0E2218", borderTop: `3px solid ${T.bad}`, borderRadius: "18px 18px 0 0", padding: "18px 18px calc(28px + env(safe-area-inset-bottom))" }}>
+          <div onClick={(e) => e.stopPropagation()} className="fadeup" style={{ width: "100%", maxWidth: 480, margin: "0 auto", background: "rgba(8,22,14,0.96)", borderTop: `3px solid ${T.bad}`, borderRadius: "18px 18px 0 0", padding: "18px 18px calc(28px + env(safe-area-inset-bottom))" }}>
             <HandDetailSheet hand={selectedHand} openModule={openModule} onClose={() => setSelectedHand(null)} />
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ShopScreen({ chips, cosmetics, onBuy, back }) {
+  const unlocked = ["classic", ...(cosmetics?.unlocked || [])];
+  const GLASS = {
+    background: "rgba(10,26,18,0.68)",
+    backdropFilter: "blur(20px) saturate(150%)",
+    WebkitBackdropFilter: "blur(20px) saturate(150%)",
+    border: "1px solid rgba(201,165,70,0.16)",
+    boxShadow: "0 6px 28px rgba(0,0,0,0.38), inset 0 1px 0 rgba(201,165,70,0.08)",
+    borderRadius: 16,
+  };
+  const backGradients = {
+    "back-crimson": "repeating-linear-gradient(135deg, #5A1F1C 0 3px, #3A1210 3px 6px)",
+    "back-gold":    "repeating-linear-gradient(45deg, #4A3A14 0 3px, #2E240C 3px 6px)",
+    "back-jade":    "repeating-linear-gradient(135deg, #1A3D28 0 3px, #0E2618 3px 6px)",
+    "back-royal":   "repeating-radial-gradient(circle at 50% 50%, #2A2050 0 4px, #1A1432 4px 8px)",
+    "back-ocean":   "repeating-linear-gradient(135deg, #0F3040 0 3px, #071E2A 3px 6px)",
+  };
+  const feltColors = {
+    "felt-forest":   "#0F2015",
+    "felt-midnight": "#14233B",
+    "felt-burgundy": "#2A1018",
+    "felt-slate":    "#1A2030",
+  };
+  return (
+    <div style={{ padding: "calc(24px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto", background: T.baize }}>
+      <button onClick={back} style={{ background: "none", border: "none", color: T.brass, fontSize: 13, padding: 0 }}>← Profile</button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20 }}>
+        <div className="serif" style={{ fontSize: 27, color: T.card }}>Shop</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(201,165,70,0.12)", border: "1px solid rgba(201,165,70,0.25)", borderRadius: 20, padding: "6px 14px" }}>
+          <span style={{ fontSize: 15 }}>🪙</span>
+          <span className="mono" style={{ fontSize: 15, fontWeight: 700, color: T.brass }}>{(chips || 0).toLocaleString()}</span>
+        </div>
+      </div>
+      <div style={{ fontSize: 12.5, color: T.mist, marginTop: 6, marginBottom: 22 }}>
+        Earn chips by completing lessons. Spend them on cosmetics below.
+      </div>
+      {SHOP_ITEMS.map((item) => {
+        const owned = unlocked.includes(item.id);
+        const canAfford = (chips || 0) >= item.price;
+        return (
+          <div key={item.id} style={{ ...GLASS, border: `1px solid ${owned ? "rgba(127,201,127,0.3)" : "rgba(201,165,70,0.16)"}`, padding: "16px 18px", marginBottom: 10, display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{
+              width: 40, height: 57, borderRadius: 6, flexShrink: 0,
+              background: item.type === "back" ? (backGradients[item.id] || T.baize) : (feltColors[item.id] || T.baize),
+              border: `1.5px solid ${owned ? T.good : T.brassDim}`,
+            }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: owned ? T.good : T.card }}>{item.name}</div>
+              <div style={{ fontSize: 12, color: T.mist, marginTop: 2 }}>{item.desc}</div>
+            </div>
+            {owned ? (
+              <span className="mono" style={{ fontSize: 11, color: T.good, fontWeight: 700 }}>OWNED</span>
+            ) : (
+              <button onClick={() => canAfford && onBuy(item)} style={{
+                background: canAfford ? T.brass : "rgba(201,165,70,0.10)",
+                color: canAfford ? "#1B1505" : T.faint,
+                border: "none", borderRadius: 10, padding: "8px 14px",
+                fontSize: 13, fontWeight: 700,
+                cursor: canAfford ? "pointer" : "not-allowed",
+                display: "flex", alignItems: "center", gap: 5,
+                flexShrink: 0,
+              }}>
+                🪙 {item.price}
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ============================ TOUR OVERLAY ============================ */
+const TOUR_STEPS = [
+  { target: "stat-strip",   screen: "home",  title: "Your Edge rating",  desc: "This shows how sharply you're playing. It rises every time you make the right call under pressure." },
+  { target: "take-seat",    screen: "home",  title: "Take a seat",       desc: "Deals you into a hand against AI opponents. Every decision you make gets graded — this is your main arena." },
+  { target: "spot-trainer", screen: "learn", title: "Spot trainer",      desc: "One decision at a time, infinite reps. Pick a difficulty and drill until the right play feels obvious." },
+  { target: "streak-card",  screen: "home",  title: "Daily streak",      desc: "Chain active days to earn bonus chips and keep your rating protected. One session + one drill = a streak day." },
+];
+
+function TourOverlay({ step, onNext, onSkip }) {
+  const [rect, setRect] = React.useState(null);
+  const current = TOUR_STEPS[step] || TOUR_STEPS[0];
+  const isLast = step >= TOUR_STEPS.length - 1;
+
+  React.useEffect(() => {
+    setRect(null);
+    const find = () => {
+      const el = document.querySelector(`[data-tour="${current.target}"]`);
+      if (el) {
+        const r = el.getBoundingClientRect();
+        setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+      }
+    };
+    const t = setTimeout(find, 180);
+    return () => clearTimeout(t);
+  }, [step, current.target]);
+
+  const pad = 10;
+  const cutout = rect ? { top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 } : null;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 812;
+  const tooltipBelow = cutout ? (cutout.top + cutout.height / 2) < vh * 0.55 : false;
+
+  const tooltipStyle = {
+    position: "fixed",
+    left: "50%",
+    transform: "translateX(-50%)",
+    width: "min(320px, calc(100vw - 36px))",
+    background: "rgba(10,22,14,0.97)",
+    border: "1px solid rgba(201,165,70,0.45)",
+    borderRadius: 16,
+    padding: "18px 20px",
+    zIndex: 9993,
+    boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+    ...(cutout
+      ? (tooltipBelow ? { top: cutout.top + cutout.height + 20 } : { bottom: vh - cutout.top + 20 })
+      : { top: "50%", transform: "translate(-50%, -50%)" }),
+  };
+
+  return (
+    <div onClick={isLast ? onSkip : onNext} style={{ position: "fixed", inset: 0, zIndex: 9990, cursor: "pointer" }}>
+      {cutout ? (
+        <div style={{ position: "fixed", top: cutout.top, left: cutout.left, width: cutout.width, height: cutout.height, borderRadius: 14, border: "2px solid rgba(201,165,70,0.65)", boxShadow: "0 0 0 9999px rgba(4,10,7,0.86)", pointerEvents: "none", zIndex: 9991 }} />
+      ) : (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(4,10,7,0.86)", zIndex: 9991, pointerEvents: "none" }} />
+      )}
+      <div onClick={(e) => e.stopPropagation()} style={tooltipStyle}>
+        <div style={{ fontSize: 10.5, color: T.faint, letterSpacing: ".13em", textTransform: "uppercase", marginBottom: 6 }}>
+          {step + 1} of {TOUR_STEPS.length}
+        </div>
+        <div className="serif" style={{ fontSize: 18, color: T.brass, marginBottom: 8 }}>{current.title}</div>
+        <div style={{ fontSize: 13.5, color: T.card, lineHeight: 1.55, marginBottom: 16 }}>{current.desc}</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <button onClick={(e) => { e.stopPropagation(); onSkip(); }} style={{ background: "none", border: "none", color: T.faint, fontSize: 13, cursor: "pointer", padding: 0 }}>
+            Skip tour
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); isLast ? onSkip() : onNext(); }} style={{ background: T.brass, border: "none", color: "#0C1810", fontSize: 13, fontWeight: 700, borderRadius: 8, padding: "8px 18px", cursor: "pointer" }}>
+            {isLast ? "Let's play →" : "Next →"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -4686,6 +5649,7 @@ export default function App() {
   const [showHands, setShowHands] = useState(false);
   const [showRanges, setShowRanges] = useState(false);
   const [tendencies, setTendencies] = useState(null);
+  const [tourStep, setTourStep] = useState(null);
   const [trainerState, setTrainerState] = useState({});
   const trainerRef = useRef({});
   const saveTrainer = useCallback((next) => {
@@ -4695,6 +5659,13 @@ export default function App() {
   }, [profile]);
   const dbSessionRef = useRef(null);
   useEffect(() => { dbSessionRef.current = dbSessionId; }, [dbSessionId]);
+
+  // Tour screen navigation: each step targets a different screen
+  useEffect(() => {
+    if (tourStep === null) return;
+    const s = TOUR_STEPS[tourStep];
+    if (s) setScreen(s.screen);
+  }, [tourStep]);
   const recordedRef = useRef(new Set());
   const equityRef = useRef(0.5);
 
@@ -4816,11 +5787,10 @@ export default function App() {
       net: past.reduce((s, x) => s + (x.net_chips || 0), 0),
     });
     dbSelect("player_profiles", `user_id=eq.${prof.id}&select=*`).then((r) => r[0] && setTendencies(r[0]));
-    // day-one ritual: brand-new accounts get three easy warm-up puzzles before anything else
+    // day-one ritual: brand-new accounts get the app spotlight tour
     if (ans && Object.keys(ans).length && !prof.streak_day) {
-      const rng = mulberry32(Date.now());
-      setPuzzleRun({ mode: "firstrun", list: [puzzleOpen(rng, 0.1), puzzleOdds(rng, true, 0.1), puzzleValue(rng, true, 0.1)], idx: 0, results: {} });
-      setScreen("puzzle");
+      setScreen("home");
+      setTourStep(0);
     }
     const prog = await dbSelect("learn_progress", `user_id=eq.${prof.id}&select=module_id`);
     setProgress(Object.fromEntries(prog.map((p) => [p.module_id, true])));
@@ -4986,7 +5956,10 @@ export default function App() {
   }, [game && game.street]); // eslint-disable-line
 
   const endSession = useCallback(() => {
-    if (hands.length === 0) { setScreen("home"); setGame(null); return; }
+    if (hands.length === 0) {
+      if (dbSessionId) dbDelete("sessions", `id=eq.${dbSessionId}`);
+      setScreen("home"); setGame(null); return;
+    }
     const analysis = analyzeSession(hands, { rating, sessionNumber: lifetime.total + 1, lastPlan });
     analysis.allHands = hands;
     // ---- Edge rating: equity-margin, pot-weighted, opponent-adjusted ----
@@ -5103,9 +6076,23 @@ export default function App() {
   }, [hands, rating, dbSessionId, profile, lifetime.total, lastPlan, currentTier]);
 
   const openModule = (id) => { setModuleId(id); setScreen("module"); };
-  const completeModuleSilent = (id) => {
+  const completeModule = (id, chipsEarned = 0, isReplay = false) => {
     setProgress((p) => ({ ...p, [id]: true }));
-    if (profile) dbUpsert("learn_progress", { user_id: profile.id, module_id: id, completed_at: new Date().toISOString(), drill_score: 100 }, "user_id,module_id");
+    const ts = { ...trainerRef.current };
+    const today = new Date().toISOString().slice(0, 10);
+    ts.xp_chips = (ts.xp_chips || 0) + chipsEarned;
+    if (ts.daily_chips_date === today) {
+      ts.daily_chips = (ts.daily_chips || 0) + chipsEarned;
+    } else {
+      ts.daily_chips = chipsEarned;
+      ts.daily_chips_date = today;
+    }
+    if (!ts.mastery) ts.mastery = {};
+    ts.mastery[id] = Math.min(5, (ts.mastery[id] || 0) + 1);
+    saveTrainer(ts);
+    if (!isReplay && profile) {
+      dbUpsert("learn_progress", { user_id: profile.id, module_id: id, completed_at: new Date().toISOString(), drill_score: 100 }, "user_id,module_id");
+    }
   };
   // Streak: daily drill + a 10-hand session = a streak day. Milestones unlock cosmetics.
   const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -5125,6 +6112,16 @@ export default function App() {
     const ts2 = { ...trainerRef.current };
     if (newStreak > 0 && newStreak % 7 === 0) ts2.shields = Math.min(2, (ts2.shields || 0) + 1);
     ts2.bestStreak = Math.max(ts2.bestStreak || 0, newStreak);
+    // Award streak chips: 20 base + up to 30 bonus scaling with streak length
+    const streakBonus = 20 + Math.min(Math.floor(newStreak * 2), 30);
+    ts2.xp_chips = (ts2.xp_chips || 0) + streakBonus;
+    const todayKey2 = todayStr();
+    if (ts2.daily_chips_date === todayKey2) {
+      ts2.daily_chips = (ts2.daily_chips || 0) + streakBonus;
+    } else {
+      ts2.daily_chips = streakBonus;
+      ts2.daily_chips_date = todayKey2;
+    }
     saveTrainer(ts2);
     const upd = { streak: newStreak, streak_day: todayStr(), cosmetics: cos };
     setProfile((p) => ({ ...p, ...upd }));
@@ -5204,7 +6201,7 @@ export default function App() {
   else if (screen === "play" && game) body = <PlayScreen game={game} setGame={setGame} equity={equity} onHeroAct={onHeroAct} onNextHand={nextHand} onEndSession={endSession} sessionHandCount={game.handNo} />;
   else if (screen === "review" && lastSession) body = <ReviewScreen session={lastSession} rating={rating} band={ratingBand(lifetime.hands)} go={go} lifetimeBuckets={bucketize(lifetimeRows)} openModule={openModule} openReplay={(h) => { setReplayHand(h); setReplayBackScreen("review"); setScreen("replay"); }} />;
   else if (screen === "replay" && replayHand) body = <ReplayScreen hand={replayHand} back={() => setScreen(replayBackScreen)} />;
-  else if (screen === "learn") body = <LearnScreen progress={progress} openModule={openModule} ratingHistory={ratingHistory} sessions={sessions} focusLeaks={lastSession ? lastSession.leaks : []} onTrainer={(levelName) => {
+  else if (screen === "learn") body = <LearnScreen progress={progress} openModule={openModule} ratingHistory={ratingHistory} sessions={sessions} trainerState={trainerState} focusLeaks={lastSession ? lastSession.leaks : []} onTrainer={(levelName) => {
     const due = dueReviews(trainerRef.current);
     const fams = [...due, ...(lastSession ? lastSession.leaks.map((l) => familyOf(l.ruleId)) : [])];
     const rng = mulberry32(Date.now());
@@ -5212,7 +6209,7 @@ export default function App() {
     setPuzzleRun({ mode: "leak", levelName, families: fams, list: [trainerPuzzle(levelName, f0, rng, trainerRef.current)], idx: 0, results: {} });
     setScreen("puzzle");
   }} />;
-  else if (screen === "module") body = <ModuleScreen moduleId={moduleId} back={() => setScreen("learn")} progress={progress} modStats={trainerState.famStats && trainerState.famStats["mod:" + moduleId]} onExercises={(id) => {
+  else if (screen === "module") body = <ModuleScreen moduleId={moduleId} back={() => setScreen("learn")} progress={progress} openModule={openModule} trainerState={trainerState} onComplete={(id, chips, isReplay) => completeModule(id, chips, isReplay)} onExercises={(id) => {
     const rng = mulberry32(Date.now());
     setPuzzleRun({ mode: "module", modId: id, list: [moduleExercise(id, rng, levelFor(trainerRef.current, "mod:" + id))], idx: 0, results: {}, justCompleted: false });
     setScreen("puzzle");
@@ -5226,7 +6223,7 @@ export default function App() {
           const key = "mod:" + r.modId;
           const ts = recordPuzzleAnswer(trainerRef.current, key, ok);
           saveTrainer(ts);
-          if (ts.famStats[key].c >= 5 && !progress[r.modId]) { completeModuleSilent(r.modId); justCompleted = true; }
+          if (ts.famStats[key].c >= 5 && !progress[r.modId]) { completeModule(r.modId, 0, false); justCompleted = true; }
         } else {
           const fam = r.list[idx] ? r.list[idx].family : null;
           saveTrainer(recordPuzzleAnswer(trainerRef.current, fam, ok));
@@ -5240,7 +6237,7 @@ export default function App() {
       }
     }}
     onNext={() => setPuzzleRun((r) => {
-      if (r.mode === "daily" || r.mode === "firstrun") {
+      if (r.mode === "daily") {
         if (r.idx >= r.list.length - 1) return r;
         return { ...r, idx: r.idx + 1 };
       }
@@ -5255,7 +6252,7 @@ export default function App() {
     })}
     onExit={() => {
       const r = puzzleRun;
-      const finishedDrill = (r.mode === "daily" || r.mode === "firstrun") && Object.keys(r.results).length >= r.list.length;
+      const finishedDrill = r.mode === "daily" && Object.keys(r.results).length >= r.list.length;
       if (r.mode === "daily" && Object.keys(r.results).length >= r.list.length) {
         const perfect = r.list.every((_, i) => r.results[i]);
         // Stamp today's date so drill credit survives a refresh even before the
@@ -5297,7 +6294,14 @@ export default function App() {
     setMpTable(null);
   }} />;
   else if (screen === "mpreview" && mpReviewId) body = <MpReviewScreen tableId={mpReviewId} session={mpSessionAnalysis} rating={rating} band={ratingBand(lifetime.hands)} go={go} openModule={openModule} openReplay={(h) => { setReplayHand(h); setReplayBackScreen("mpreview"); setScreen("replay"); }} />;
-  else if (screen === "profile") body = <ProfileScreen user={user} rating={rating} ratingHistory={ratingHistory} sessions={sessions} progress={progress} answers={answers} lifetime={lifetime} onSignOut={signOut} onDeleteAccount={handleDeleteAccount} tendencies={tendencies} cosmetics={profile ? profile.cosmetics : {}} trainer={trainerState} onCosmetic={(k, v) => {
+  else if (screen === "shop") body = <ShopScreen chips={(trainerState && trainerState.xp_chips) || 0} cosmetics={profile ? profile.cosmetics : {}} back={() => setScreen("profile")} onBuy={(item) => {
+    const cos = { ...((profile && profile.cosmetics) || {}), unlocked: [...new Set([...((profile && profile.cosmetics && profile.cosmetics.unlocked) || []), item.id])] };
+    const ts = { ...trainerRef.current, xp_chips: Math.max(0, ((trainerRef.current && trainerRef.current.xp_chips) || 0) - item.price) };
+    setProfile((p) => ({ ...p, cosmetics: cos }));
+    saveTrainer(ts);
+    if (profile) dbUpdate("users", `id=eq.${profile.id}`, { cosmetics: cos });
+  }} />;
+  else if (screen === "profile") body = <ProfileScreen user={user} rating={rating} ratingHistory={ratingHistory} sessions={sessions} progress={progress} answers={answers} lifetime={lifetime} onSignOut={signOut} onDeleteAccount={handleDeleteAccount} tendencies={tendencies} cosmetics={profile ? profile.cosmetics : {}} trainer={trainerState} go={go} onCosmetic={(k, v) => {
     const cos = { ...((profile && profile.cosmetics) || {}), [k]: v };
     COSMETICS[k === "back" ? "back" : "felt"] = v || (k === "back" ? "classic" : null);
     setProfile((p) => ({ ...p, cosmetics: cos }));
@@ -5321,14 +6325,24 @@ export default function App() {
   return (
     <div className="riq app-root" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "radial-gradient(140% 100% at 50% 0%, #0A1A12 0%, #060D09 60%)", display: "flex", justifyContent: "center", alignItems: "stretch" }}>
       <style>{CSS}</style>
-      <div className="felt-grain app-shell" style={{ position: "relative", width: "100%", maxWidth: 440, height: "100dvh", background: `radial-gradient(120% 80% at 50% -5%, ${T.baize2} 0%, ${T.baize} 55%, #081109 100%)`, overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, overflow: "hidden" }}>{body}</div>
+      <div className="felt-grain app-shell" style={{ position: "relative", width: "100%", maxWidth: 440, height: "100dvh", background: "radial-gradient(120% 80% at 50% -5%, #122A1F 0%, #0A1A12 55%, #060D09 100%)", overflow: "hidden" }}>
+        <div className="orb" style={{ width: 480, height: 480, top: "-12%", left: "-18%", background: "rgba(18,70,45,0.32)", animation: "riqBgDrift0 38s ease-in-out infinite" }} />
+        <div className="orb" style={{ width: 400, height: 400, bottom: "2%", right: "-16%", background: "rgba(10,50,30,0.28)", animation: "riqBgDrift1 44s ease-in-out infinite 6s" }} />
+        <div className="orb" style={{ width: 320, height: 320, top: "36%", left: "42%", background: "rgba(201,165,70,0.09)", animation: "riqBgDrift2 32s ease-in-out infinite 14s" }} />
+        <div key={screen} className="screen-in" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, overflow: "hidden", zIndex: 1 }}>{body}</div>
         {showHandBtn && <HandRankButton onOpen={() => setShowHands(true)} />}
         {showHandBtn && <RangeButton onOpen={() => setShowRanges(true)} />}
         {showHands && <HandRankSheet onClose={() => setShowHands(false)} />}
         {showRanges && <RangeSheet onClose={() => setShowRanges(false)} />}
         <FeedbackWidget screen={screen} profile={profile} rating={rating} />
         {user && !["module", "mptable", "puzzle"].includes(screen) && <NavBar screen={screen} go={go} />}
+        {tourStep !== null && (
+          <TourOverlay
+            step={tourStep}
+            onNext={() => setTourStep((s) => Math.min(s + 1, TOUR_STEPS.length - 1))}
+            onSkip={() => setTourStep(null)}
+          />
+        )}
       </div>
     </div>
   );
