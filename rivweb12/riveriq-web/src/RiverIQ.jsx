@@ -99,6 +99,14 @@ const CSS = `
 @keyframes riqFlawlessBorder { 0%,100% { box-shadow: 0 0 0 0 rgba(201,165,70,.3), 0 0 28px rgba(201,165,70,.12); } 50% { box-shadow: 0 0 0 5px rgba(201,165,70,.28), 0 0 55px rgba(201,165,70,.28); } }
 @keyframes riqHeartbeatIn { 0% { opacity: 0; transform: scale(.82); } 38% { transform: scale(1.06); opacity: 1; } 62% { transform: scale(.97); } 100% { transform: scale(1); } }
 @keyframes riqChipRoll { 0% { opacity: 0; transform: translateY(6px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes riqFlameFlicker { 0%,100% { transform: scale(1) rotate(-2deg); } 30% { transform: scale(1.12) rotate(2deg); } 60% { transform: scale(.95) rotate(-1deg); } 80% { transform: scale(1.06) rotate(1deg); } }
+@keyframes riqToastIn { 0% { opacity: 0; transform: translate(-50%, 24px); } 10% { opacity: 1; transform: translate(-50%, 0); } 88% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -10px); } }
+@keyframes riqClaimPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(201,165,70,.55); } 50% { box-shadow: 0 0 0 7px rgba(201,165,70,0); } }
+@keyframes riqStartFloat { 0%,100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -6px); } }
+@keyframes riqConfetti { 0% { opacity: 1; transform: translateY(-10px) rotate(0deg); } 100% { opacity: 0; transform: translateY(130px) rotate(320deg); } }
+@keyframes riqOverlayIn { 0% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes riqBigPop { 0% { transform: scale(.4); opacity: 0; } 55% { transform: scale(1.15); opacity: 1; } 75% { transform: scale(.96); } 100% { transform: scale(1); } }
+@keyframes riqDotBlink { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
 .riq .deal { animation: riqDealIn .28s ease both; }
 .riq .fadeup { animation: riqFadeUp .35s ease both; }
 .riq .screen-in { animation: riqScreenIn 0.52s cubic-bezier(0.16,1,0.3,1) both; }
@@ -1371,6 +1379,131 @@ function isModuleLocked(moduleId, progress) {
   return false;
 }
 
+/* ============================ ENGAGEMENT ENGINE: chips, levels, quests, badges ============================ */
+// Chips are the single reward currency: xp_chips is the spendable balance, xp_total is
+// lifetime chips earned and never decreases — it drives the player level.
+function awardChips(tsIn, n) {
+  const ts = { ...(tsIn || {}) };
+  const today = new Date().toISOString().slice(0, 10);
+  ts.xp_total = (ts.xp_total != null ? ts.xp_total : ts.xp_chips || 0) + n;
+  ts.xp_chips = (ts.xp_chips || 0) + n;
+  if (ts.daily_chips_date === today) ts.daily_chips = (ts.daily_chips || 0) + n;
+  else { ts.daily_chips = n; ts.daily_chips_date = today; }
+  return bumpQuest(ts, "chips", n);
+}
+const xpTotalOf = (ts) => (ts && (ts.xp_total != null ? ts.xp_total : ts.xp_chips)) || 0;
+const levelNeed = (lv) => 80 + (lv - 1) * 45;
+function levelInfo(xpTotal) {
+  let lv = 1, rem = Math.max(0, xpTotal || 0);
+  while (rem >= levelNeed(lv) && lv < 99) { rem -= levelNeed(lv); lv++; }
+  return { level: lv, into: rem, need: levelNeed(lv), pct: Math.min(1, rem / levelNeed(lv)) };
+}
+
+const QUEST_POOL = [
+  { id: "drill",   icon: "🎯", title: "Finish the daily drill", target: 1,  reward: 30 },
+  { id: "hands",   icon: "♠️", title: "Play 10 hands",          target: 10, reward: 25 },
+  { id: "wins",    icon: "🏆", title: "Win 3 pots",             target: 3,  reward: 25 },
+  { id: "puzzles", icon: "🧠", title: "Nail 5 puzzles",         target: 5,  reward: 20 },
+  { id: "lesson",  icon: "📗", title: "Complete a lesson",      target: 1,  reward: 25 },
+  { id: "chips",   icon: "🪙", title: "Earn 60 chips",          target: 60, reward: 20 },
+];
+// 3 quests per day, same set for everyone (date-seeded).
+function dailyQuestSet() {
+  const d = new Date();
+  const rng = mulberry32((d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()) * 7 + 3);
+  const pool = [...QUEST_POOL], picks = [];
+  while (picks.length < 3 && pool.length) picks.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
+  return picks;
+}
+function questsFor(ts) {
+  const today = new Date().toISOString().slice(0, 10);
+  const q = (ts && ts.quests && ts.quests.date === today) ? ts.quests : { progress: {}, claimed: {} };
+  return dailyQuestSet().map((def) => ({
+    ...def,
+    n: Math.min((q.progress || {})[def.id] || 0, def.target),
+    done: ((q.progress || {})[def.id] || 0) >= def.target,
+    claimed: !!(q.claimed || {})[def.id],
+  }));
+}
+function bumpQuest(tsIn, type, n = 1) {
+  const ts = { ...(tsIn || {}) };
+  const today = new Date().toISOString().slice(0, 10);
+  const q = ts.quests && ts.quests.date === today ? { ...ts.quests } : { date: today, progress: {}, claimed: {} };
+  q.progress = { ...(q.progress || {}), [type]: ((q.progress || {})[type] || 0) + n };
+  ts.quests = q;
+  return ts;
+}
+// Returns [newTrainerState, rewardChips]; reward is 0 when the quest isn't claimable.
+function claimQuest(tsIn, id) {
+  const def = QUEST_POOL.find((x) => x.id === id);
+  const today = new Date().toISOString().slice(0, 10);
+  const q = tsIn && tsIn.quests && tsIn.quests.date === today ? tsIn.quests : null;
+  if (!def || !q || ((q.progress || {})[id] || 0) < def.target || (q.claimed || {})[id]) return [tsIn, 0];
+  const ts = { ...tsIn, quests: { ...q, claimed: { ...(q.claimed || {}), [id]: true } } };
+  ts.questsClaimed = (ts.questsClaimed || 0) + 1;
+  return [awardChips(ts, def.reward), def.reward];
+}
+const questClaimable = (ts) => questsFor(ts).some((x) => x.done && !x.claimed);
+
+const BADGES = [
+  { id: "dealt-in",   icon: "♠",  name: "Dealt in",        desc: "Play your first hand",        check: (c) => c.hands >= 1 },
+  { id: "grind-100",  icon: "🃏", name: "Century club",    desc: "Play 100 hands",              check: (c) => c.hands >= 100 },
+  { id: "grind-500",  icon: "🎰", name: "Table regular",   desc: "Play 500 hands",              check: (c) => c.hands >= 500 },
+  { id: "grind-1k",   icon: "🗿", name: "Iron grinder",    desc: "Play 1,000 hands",            check: (c) => c.hands >= 1000 },
+  { id: "student",    icon: "🎓", name: "Student",         desc: "Finish your first lesson",    check: (c) => c.mods >= 1 },
+  { id: "ch1",        icon: "📗", name: "Foundations",     desc: "Complete Chapter 1",          check: (c) => c.ch1 },
+  { id: "curriculum", icon: "👑", name: "Curriculum king", desc: "Complete every module",       check: (c) => c.allMods },
+  { id: "streak-3",   icon: "🔥", name: "Warming up",      desc: "3-day streak",                check: (c) => c.streak >= 3 },
+  { id: "streak-7",   icon: "🔥", name: "Week of fire",    desc: "7-day streak",                check: (c) => c.streak >= 7 },
+  { id: "streak-14",  icon: "🌋", name: "Two weeks deep",  desc: "14-day streak",               check: (c) => c.streak >= 14 },
+  { id: "streak-30",  icon: "☄️", name: "Unstoppable",     desc: "30-day streak",               check: (c) => c.streak >= 30 },
+  { id: "clean-10",   icon: "⚡", name: "Surgeon",         desc: "10 correct calls in a row",   check: (c) => c.clean >= 10 },
+  { id: "clean-25",   icon: "💎", name: "Machine",         desc: "25 correct calls in a row",   check: (c) => c.clean >= 25 },
+  { id: "puzzle-50",  icon: "🧠", name: "Puzzle hound",    desc: "Solve 50 trainer spots",      check: (c) => c.puzzles >= 50 },
+  { id: "puzzle-250", icon: "🧬", name: "Spot savant",     desc: "Solve 250 trainer spots",     check: (c) => c.puzzles >= 250 },
+  { id: "flawless",   icon: "✦",  name: "Flawless ten",    desc: "A perfect 10/10 daily drill", check: (c) => c.perfectDrills >= 1 },
+  { id: "drill-7",    icon: "🎯", name: "Daily devotee",   desc: "Finish 7 daily drills",       check: (c) => c.drills >= 7 },
+  { id: "chips-500",  icon: "🪙", name: "Chip stacker",    desc: "Earn 500 chips lifetime",     check: (c) => c.xpTotal >= 500 },
+  { id: "chips-2k",   icon: "💰", name: "High roller",     desc: "Earn 2,000 chips lifetime",   check: (c) => c.xpTotal >= 2000 },
+  { id: "level-5",    icon: "📈", name: "Rising star",     desc: "Reach level 5",               check: (c) => c.level >= 5 },
+  { id: "level-10",   icon: "🥇", name: "Veteran",         desc: "Reach level 10",              check: (c) => c.level >= 10 },
+  { id: "shark",      icon: "🦈", name: "Shark",           desc: "Reach 1650 Edge",             check: (c) => c.rating >= 1650 },
+  { id: "crusher",    icon: "🏆", name: "Crusher",         desc: "Reach 1900 Edge",             check: (c) => c.rating >= 1900 },
+  { id: "combo-5",    icon: "🌀", name: "Combo artist",    desc: "Hit a 5-combo in a lesson",   check: (c) => c.combo >= 5 },
+  { id: "quests-10",  icon: "🗝", name: "Quest master",    desc: "Claim 10 quest rewards",      check: (c) => c.claims >= 10 },
+  { id: "night-owl",  icon: "🌙", name: "Night owl",       desc: "Grind after midnight",        check: (c) => c.active && c.hour >= 0 && c.hour < 5 },
+  { id: "early-bird", icon: "🌅", name: "Early bird",      desc: "Grind before 7am",            check: (c) => c.active && c.hour >= 5 && c.hour < 7 },
+];
+function badgeCtx(ts, lifetime, progress, streak, rating) {
+  const fam = (ts && ts.famStats) || {};
+  return {
+    hands: (lifetime && lifetime.hands) || 0,
+    mods: Object.keys(progress || {}).filter((id) => MODULE_INDEX[id]).length,
+    ch1: LEARN[0].modules.every((m) => (progress || {})[m.id]),
+    allMods: CURRICULUM_ORDER.every((id) => (progress || {})[id]),
+    streak: Math.max(streak || 0, (ts && ts.bestStreak) || 0),
+    clean: (ts && ts.cleanBest) || 0,
+    puzzles: Object.values(fam).reduce((s, f) => s + (f.n || 0), 0),
+    perfectDrills: (ts && ts.perfectDrills) || 0,
+    drills: (ts && ts.drillsDone) || 0,
+    xpTotal: xpTotalOf(ts),
+    level: levelInfo(xpTotalOf(ts)).level,
+    rating: rating || 0,
+    combo: (ts && ts.bestCombo) || 0,
+    claims: (ts && ts.questsClaimed) || 0,
+    hour: new Date().getHours(),
+  };
+}
+// Sweep the catalog; returns [newTrainerState, freshlyEarnedBadges].
+function checkBadges(tsIn, ctx) {
+  const got = { ...((tsIn && tsIn.badges) || {}) };
+  const fresh = [];
+  BADGES.forEach((b) => {
+    if (!got[b.id] && b.check(ctx)) { got[b.id] = new Date().toISOString().slice(0, 10); fresh.push(b); }
+  });
+  return fresh.length ? [{ ...(tsIn || {}), badges: got }, fresh] : [tsIn, fresh];
+}
+
 /* ============================ UI ATOMS ============================ */
 function PlayingCard({ card, hidden, w = 38, deal }) {
   const h = w * 1.42;
@@ -1513,7 +1646,7 @@ function RatingBar({ value, delta, band }) {
     </div>
   );
 }
-function NavBar({ screen, go }) {
+function NavBar({ screen, go, alerts = {} }) {
   const items = [
     { id: "home", label: "Home", glyph: "♣" },
     { id: "play", label: "Play", glyph: "♠" },
@@ -1530,7 +1663,8 @@ function NavBar({ screen, go }) {
         const red = it.glyph === "♥" || it.glyph === "♦";
         const glyphColor = on ? (red ? T.cordovan : T.brass) : (red ? "rgba(224,113,107,.7)" : "rgba(201,165,70,.72)");
         return (
-          <button key={it.id} onClick={() => go(it.id)} aria-label={it.label} style={{ flex: 1, padding: "10px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", background: "none", border: "none", color: on ? (red ? T.cordovan : T.brass) : T.mist }}>
+          <button key={it.id} onClick={() => go(it.id)} aria-label={it.label} style={{ flex: 1, padding: "10px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", background: "none", border: "none", color: on ? (red ? T.cordovan : T.brass) : T.mist, position: "relative" }}>
+            {alerts[it.id] && !on && <span style={{ position: "absolute", top: 6, left: "calc(50% + 9px)", width: 7, height: 7, borderRadius: "50%", background: T.cordovan, boxShadow: "0 0 6px rgba(194,69,62,.8)", animation: "riqDotBlink 1.6s ease infinite" }} />}
             <div style={{ fontSize: it.glyph === "◈" ? 16 : 20, lineHeight: 1, color: glyphColor }}>{it.glyph}</div>
             <div style={{ fontSize: 10, marginTop: 3, letterSpacing: ".05em", textTransform: "uppercase", fontWeight: on ? 700 : 500, color: on ? (red ? T.cordovan : T.brass) : T.mist }}>{it.label}</div>
           </button>
@@ -2429,6 +2563,13 @@ function PuzzleScreen({ run, onResult, onNext, onExit, justCompleted }) {
   }
   const finishRun = run.mode === "daily" && run.idx >= run.list.length - 1;
   const rightCount = stageGrades.filter((x) => x !== "wrong").length;
+  // running combo: consecutive correct puzzles ending at the latest answered one
+  let combo = 0;
+  for (let i = run.idx; i >= 0; i--) {
+    if (run.results[i] === true) combo++;
+    else if (i === run.idx && run.results[i] === undefined) continue;
+    else break;
+  }
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "calc(12px + env(safe-area-inset-top)) 12px 0" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -2437,11 +2578,21 @@ function PuzzleScreen({ run, onResult, onNext, onExit, justCompleted }) {
           {run.mode === "daily" ? "Daily drill" : run.mode === "module" ? "Exercises" : "Spot trainer"}
           {run.levelName ? <span style={{ fontSize: 11, color: T.faint, marginLeft: 6, textTransform: "uppercase", letterSpacing: ".08em" }}>{run.levelName}</span> : null}
         </span>
-        <span className="mono" style={{ fontSize: 12, color: T.faint }}>
+        <span className="mono" style={{ fontSize: 12, color: T.faint, display: "flex", alignItems: "center", gap: 7 }}>
+          {combo >= 2 && <span style={{ color: T.brass, fontWeight: 700, display: "inline-block", animation: "riqFlameFlicker 1.1s ease infinite" }}>🔥{combo}</span>}
           {run.mode === "daily" ? `${run.idx + 1}/${run.list.length}` : `#${run.idx + 1}`}
           {stages.length > 1 ? ` · ${stageIdx + 1}/${stages.length}` : ""}
         </span>
       </div>
+      {run.mode === "daily" && (
+        <div style={{ display: "flex", gap: 3, marginBottom: 6 }}>
+          {run.list.map((_, i) => {
+            const r = run.results[i];
+            const bg = r === true ? T.good : r === false ? T.bad : i === run.idx ? T.brass : "rgba(201,165,70,.15)";
+            return <div key={i} style={{ flex: 1, height: 4, borderRadius: 2, background: bg, transition: "background .3s", animation: i === run.idx && r === undefined ? "riqShimmer 1.6s ease infinite" : "none" }} />;
+          })}
+        </div>
+      )}
       {/* Table: compressed to fixed height when feedback is showing so cards stay visible */}
       <div key={"tbl" + run.idx + "-" + stageIdx} style={{ position: "relative", flex: answered ? "0 0 auto" : 1, height: answered ? 210 : undefined, minHeight: answered ? 210 : 300, margin: "4px 0" }}>
         <div style={{ position: "absolute", inset: "7% 4%", borderRadius: "50%", background: ({ "felt-midnight": `radial-gradient(ellipse at 50% 38%, #14233B, #0A1322 75%)`, "felt-burgundy": `radial-gradient(ellipse at 50% 38%, #2A1018, #180A10 75%)`, "felt-slate": `radial-gradient(ellipse at 50% 38%, #1A2030, #0E1520 75%)`, "felt-forest": `radial-gradient(ellipse at 50% 38%, #0F2015, #091510 75%)` })[COSMETICS.felt] || `radial-gradient(ellipse at 50% 38%, ${T.baize2}, ${T.baize} 75%)`, border: `7px solid #2A2017`, boxShadow: `inset 0 0 40px rgba(0,0,0,.55), 0 0 0 2px ${T.brassDim}` }} />
@@ -2471,11 +2622,14 @@ function PuzzleScreen({ run, onResult, onNext, onExit, justCompleted }) {
           const heroCode = hero.cards && hero.cards.length === 2 ? handCode(hero.cards[0], hero.cards[1]) : null;
           const reqEq = toCall > 0 ? toCall / (pot + toCall) : null;
           return (
-            <div className="fadeup" style={{ flex: 1, overflowY: "auto", background: "rgba(8,22,14,0.96)", borderTop: `3px solid ${vColor}`, borderRadius: "16px 16px 0 0", padding: "14px 16px", paddingBottom: "calc(14px + env(safe-area-inset-bottom))" }}>
+            <div className="fadeup" style={{ flex: 1, overflowY: "auto", background: "rgba(8,22,14,0.96)", borderTop: `3px solid ${vColor}`, borderRadius: "16px 16px 0 0", padding: "14px 16px", paddingBottom: "calc(14px + env(safe-area-inset-bottom))", animation: answered.grade === "wrong" ? "riqFadeUp .35s ease both, riqWrongShake .5s ease" : undefined }}>
               {/* Header row: verdict + best-play chip */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, position: "relative" }}>
                 <span className="serif" style={{ fontSize: 19, color: vColor }}>
                   {answered.grade === "correct" ? "Correct." : answered.grade === "ok" ? "Works, note the detail." : "Not this time."}
+                  {answered.grade === "correct" && isLastStage && (
+                    <span className="mono" style={{ position: "absolute", left: 4, top: -6, fontSize: 14, fontWeight: 800, color: T.brass, animation: "riqChipFloat 1.1s .15s ease forwards", pointerEvents: "none", opacity: 0 }}>+3 🪙{combo >= 3 ? "  ×🔥" : ""}</span>
+                  )}
                 </span>
                 <span style={{ fontSize: 11.5, background: "rgba(255,255,255,.06)", border: "1px solid " + T.line, borderRadius: 99, padding: "3px 10px", color: T.card, whiteSpace: "nowrap" }}>
                   Best: <b style={{ color: T.card }}>{stage.correct[0] === "raise" ? (stage.allinLabel ? "all-in" : g.currentBet > 0 ? "raise" : "bet") : stage.correct[0]}</b>
@@ -2812,6 +2966,117 @@ function AuthScreen({ onAuthed, pendingJoin }) {
     </div>
   );
 }
+/* ============ ENGAGEMENT UI: level ring, quests, countdowns, toasts, celebrations ============ */
+function LevelRing({ ts, size = 46 }) {
+  const info = levelInfo(xpTotalOf(ts));
+  const rad = (size - 7) / 2, circ = 2 * Math.PI * rad;
+  return (
+    <div title={`Level ${info.level} · ${info.into}/${info.need} chips to next`} style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)", display: "block" }}>
+        <circle cx={size / 2} cy={size / 2} r={rad} fill="none" stroke="rgba(201,165,70,.15)" strokeWidth="3.5" />
+        <circle cx={size / 2} cy={size / 2} r={rad} fill="none" stroke={T.brass} strokeWidth="3.5" strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={circ * (1 - info.pct)} style={{ transition: "stroke-dashoffset .6s ease" }} />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <span className="mono" style={{ fontSize: 7.5, color: T.faint, letterSpacing: ".08em", lineHeight: 1 }}>LVL</span>
+        <span className="mono" style={{ fontSize: size * 0.3, fontWeight: 700, color: T.brass, lineHeight: 1.1 }}>{info.level}</span>
+      </div>
+    </div>
+  );
+}
+function useMidnightCountdown() {
+  const calc = () => { const now = new Date(); const mid = new Date(now); mid.setHours(24, 0, 0, 0); return mid - now; };
+  const [ms, setMs] = React.useState(calc);
+  React.useEffect(() => { const t = setInterval(() => setMs(calc()), 30000); return () => clearInterval(t); }, []);
+  const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+function QuestsCard({ trainerState, onClaim }) {
+  const quests = questsFor(trainerState || {});
+  const left = useMidnightCountdown();
+  const [burst, setBurst] = React.useState(null);
+  const claimable = quests.some((q) => q.done && !q.claimed);
+  const allClaimed = quests.every((q) => q.claimed);
+  return (
+    <div className="gp" style={{ background: T.baize2, border: `1px solid ${claimable ? "rgba(201,165,70,.42)" : T.line}`, borderRadius: 14, padding: "13px 16px", marginTop: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <span className="mono" style={{ fontSize: 10, color: T.brass, letterSpacing: ".12em", textTransform: "uppercase" }}>⚔️ Today's quests</span>
+        <span className="mono" style={{ fontSize: 10, color: allClaimed ? T.good : T.faint }}>{allClaimed ? "All claimed ✓" : `gone in ${left}`}</span>
+      </div>
+      {quests.map((q, qi) => {
+        const isClaimable = q.done && !q.claimed;
+        return (
+          <div key={q.id} style={{ position: "relative", display: "flex", alignItems: "center", gap: 11, padding: "9px 0", borderTop: qi > 0 ? `1px solid ${T.line}` : "none", opacity: q.claimed ? 0.55 : 1 }}>
+            <span style={{ fontSize: 19, filter: q.claimed ? "grayscale(.7)" : "none" }}>{q.icon}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 12.5, color: q.claimed ? T.mist : T.card, fontWeight: 600, textDecoration: q.claimed ? "line-through" : "none" }}>{q.title}</span>
+                <span className="mono" style={{ fontSize: 10.5, color: q.done ? T.good : T.faint }}>{q.n}/{q.target}</span>
+              </div>
+              <div style={{ height: 4, borderRadius: 2, background: "rgba(201,165,70,.1)", overflow: "hidden" }}>
+                <div style={{ width: `${(q.n / q.target) * 100}%`, height: "100%", background: q.done ? T.good : T.brass, borderRadius: 2, transition: "width .5s ease" }} />
+              </div>
+            </div>
+            {isClaimable ? (
+              <button onClick={() => { setBurst(q.id); setTimeout(() => setBurst(null), 950); onClaim(q.id); }} style={{ background: T.brass, color: "#1B1505", border: "none", borderRadius: 9, padding: "7px 11px", fontSize: 11.5, fontWeight: 800, animation: "riqClaimPulse 1.6s ease infinite", flexShrink: 0, whiteSpace: "nowrap" }}>
+                +{q.reward} 🪙
+              </button>
+            ) : q.claimed ? (
+              <span style={{ color: T.good, fontSize: 15, flexShrink: 0 }}>✓</span>
+            ) : (
+              <span className="mono" style={{ fontSize: 10.5, color: T.faint, flexShrink: 0 }}>+{q.reward}🪙</span>
+            )}
+            {burst === q.id && <span className="mono" style={{ position: "absolute", right: 26, top: 8, color: T.brass, fontWeight: 800, fontSize: 15, animation: "riqChipFloat .95s ease forwards", pointerEvents: "none", zIndex: 3 }}>+{q.reward} 🪙</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+function BadgeToast({ badge, onDone }) {
+  React.useEffect(() => { const t = setTimeout(onDone, 3400); return () => clearTimeout(t); }, [badge.id]); // eslint-disable-line
+  return (
+    <div style={{ position: "absolute", bottom: 78, left: "50%", zIndex: 80, width: "min(320px, calc(100% - 40px))", animation: "riqToastIn 3.4s ease both", pointerEvents: "none" }}>
+      <div className="gp" style={{ display: "flex", alignItems: "center", gap: 13, background: "rgba(10,26,18,0.96)", border: "1px solid rgba(201,165,70,.5)", borderRadius: 14, padding: "12px 16px" }}>
+        <span style={{ fontSize: 28 }}>{badge.icon}</span>
+        <div>
+          <div className="mono" style={{ fontSize: 9, color: T.brass, letterSpacing: ".18em", textTransform: "uppercase" }}>Achievement unlocked</div>
+          <div className="serif" style={{ fontSize: 17, color: T.card, marginTop: 2 }}>{badge.name}</div>
+          <div style={{ fontSize: 11, color: T.mist }}>{badge.desc}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+function CelebrationOverlay({ celeb, onClose }) {
+  if (!celeb) return null;
+  const isStreak = celeb.type === "streak";
+  const confetti = Array.from({ length: 26 }, (_, i) => ({
+    left: (i * 37 + 11) % 100, delay: (i % 9) * 130,
+    color: i % 3 === 0 ? T.brass : i % 3 === 1 ? T.good : T.cordovan, size: 5 + (i % 3) * 3,
+  }));
+  const nextMs = isStreak ? STREAK_MILESTONES.find(([d]) => celeb.streak < d) : null;
+  return (
+    <div onClick={onClose} style={{ position: "absolute", inset: 0, zIndex: 90, background: "rgba(4,10,7,.9)", display: "flex", alignItems: "center", justifyContent: "center", animation: "riqOverlayIn .25s ease both", cursor: "pointer" }}>
+      {confetti.map((c, i) => (
+        <div key={i} style={{ position: "absolute", top: "16%", left: c.left + "%", width: c.size, height: c.size * 1.6, background: c.color, borderRadius: 2, animation: `riqConfetti 1.7s ${c.delay}ms cubic-bezier(.3,.6,.6,1) forwards` }} />
+      ))}
+      <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center", padding: "34px 28px 28px", borderRadius: 22, background: "rgba(10,26,18,.94)", border: "1px solid rgba(201,165,70,.45)", boxShadow: "0 0 60px rgba(201,165,70,.18)", width: "min(320px, calc(100% - 48px))", animation: "riqBigPop .5s cubic-bezier(.2,1.2,.4,1) both", cursor: "default" }}>
+        <div style={{ fontSize: 58, display: "inline-block", animation: "riqFlameFlicker 1.1s ease infinite" }}>{isStreak ? "🔥" : "🏅"}</div>
+        <div className="serif" style={{ fontSize: 30, color: T.brass, marginTop: 10 }}>
+          {isStreak ? `${celeb.streak}-day streak!` : `Level ${celeb.level}!`}
+        </div>
+        <div style={{ fontSize: 13.5, color: T.mist, marginTop: 8, lineHeight: 1.55 }}>
+          {isStreak
+            ? <>Day banked.{celeb.chips ? <> You earned <b style={{ color: T.brass }}>+{celeb.chips} 🪙</b> streak chips.</> : null} Come back tomorrow to keep the fire alive.</>
+            : <>Your grind is paying off. Keep stacking chips to hit level {celeb.level + 1}.</>}
+        </div>
+        {nextMs && <div className="mono" style={{ fontSize: 11, color: T.faint, marginTop: 12 }}>{nextMs[0] - celeb.streak} day{nextMs[0] - celeb.streak !== 1 ? "s" : ""} to unlock: {nextMs[1]}</div>}
+        <Btn kind="primary" onClick={onClose} style={{ width: "100%", marginTop: 20 }}>Keep going →</Btn>
+      </div>
+    </div>
+  );
+}
+
 const STREAK_MILESTONES = [
   [3, "Crimson card back"],
   [7, "Gold card back"],
@@ -3013,7 +3278,7 @@ function StreakActivityCard({ streak, streakDay, daily, trainerState, profile, g
   );
 }
 
-function HomeScreen({ user, sessions, lifetime, rating, go, streak, streakDay, daily, onDailyDrill, trainerState, ratingHistory, onOpenHands, sessionHandCount = 0, profile }) {
+function HomeScreen({ user, sessions, lifetime, rating, go, streak, streakDay, daily, onDailyDrill, trainerState, ratingHistory, onOpenHands, sessionHandCount = 0, profile, onClaimQuest }) {
   const last = sessions[sessions.length - 1];
   const lastDelta = last ? last.ratingDelta : null;
   const hr = new Date().getHours();
@@ -3028,10 +3293,17 @@ function HomeScreen({ user, sessions, lifetime, rating, go, streak, streakDay, d
   const sessCount = daily.session ? 10 : Math.min(Math.max(sessionHandCount, _storedDailyHands), 10);
   const [scenarioFamily, setScenarioFamily] = useState(null);
 
+  const resetIn = useMidnightCountdown();
+  const streakAtRisk = !bankedToday && streak > 0 && new Date().getHours() >= 17;
   return (
     <div style={{ padding: "calc(26px + env(safe-area-inset-top)) 20px 80px", overflowY: "auto", height: "100%" }}>
-      <div className="serif" style={{ fontSize: 30, color: T.card, lineHeight: 1.05 }}>{greet}, {user.name}.</div>
-      <div style={{ color: T.faint, fontSize: 13, marginTop: 4 }}>{lifetime.hands > 0 ? percentileLine(rating) : "A seat is open whenever you are."}</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <div className="serif" style={{ fontSize: 30, color: T.card, lineHeight: 1.05 }}>{greet}, {user.name}.</div>
+          <div style={{ color: T.faint, fontSize: 13, marginTop: 4 }}>{lifetime.hands > 0 ? percentileLine(rating) : "A seat is open whenever you are."}</div>
+        </div>
+        <LevelRing ts={trainerState} size={50} />
+      </div>
 
       {/* stat strip: numerals as the hero, hairline dividers instead of three boxes */}
       <div data-tour="stat-strip" style={{ display: "flex", alignItems: "stretch", marginTop: 22, marginBottom: 4 }}>
@@ -3061,6 +3333,13 @@ function HomeScreen({ user, sessions, lifetime, rating, go, streak, streakDay, d
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, padding: "10px 14px", borderRadius: 10, background: "rgba(127,201,127,.06)", border: "1px solid rgba(127,201,127,.25)" }}>
           <span style={{ color: T.good, fontSize: 13 }}>▲</span>
           <span style={{ fontSize: 12.5, color: "#CFE3D2" }}>{wkProgress}</span>
+        </div>
+      )}
+
+      {streakAtRisk && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, padding: "11px 14px", borderRadius: 10, background: "rgba(194,69,62,.09)", border: "1px solid rgba(194,69,62,.35)" }}>
+          <span style={{ fontSize: 18, display: "inline-block", animation: "riqFlameFlicker 1.2s ease infinite" }}>🔥</span>
+          <span style={{ fontSize: 12.5, color: "#E8C9C4", lineHeight: 1.45 }}>Your <b>{streak}-day streak</b> is on the line — it resets in <b className="mono">{resetIn}</b>.</span>
         </div>
       )}
 
@@ -3094,6 +3373,7 @@ function HomeScreen({ user, sessions, lifetime, rating, go, streak, streakDay, d
           </div>
         );
       })()}
+      <QuestsCard trainerState={trainerState} onClaim={onClaimQuest} />
       <div data-tour="streak-card">
         <StreakActivityCard streak={streak} streakDay={streakDay} daily={daily} trainerState={trainerState} profile={profile} go={go} sessionHandCount={sessionHandCount} />
       </div>
@@ -3109,10 +3389,14 @@ function HomeScreen({ user, sessions, lifetime, rating, go, streak, streakDay, d
       </div>
       {/* daily card: the brass left-rail signals "this is the thing to do today" */}
       <button onClick={() => onDailyDrill(scenarioFamily)} style={{ width: "100%", textAlign: "left", background: bankedToday ? "rgba(201,165,70,.07)" : T.baize2, border: "1px solid " + T.line, borderLeft: `3px solid ${bankedToday ? T.good : T.brass}`, borderRadius: 12, padding: "16px 18px", color: T.card }}>
-        <div className="mono" style={{ fontSize: 10, color: bankedToday ? T.good : T.brass, letterSpacing: ".12em", textTransform: "uppercase" }}>
-          {bankedToday ? "Streak banked for today" : "Keep the streak alive"}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <span className="mono" style={{ fontSize: 10, color: bankedToday ? T.good : T.brass, letterSpacing: ".12em", textTransform: "uppercase" }}>
+            {bankedToday ? "Streak banked for today" : "Keep the streak alive"}
+          </span>
+          {!bankedToday && <span className="mono" style={{ fontSize: 10, color: T.cordovan }}>⏳ {resetIn}</span>}
         </div>
         <div className="serif" style={{ fontSize: 21, marginTop: 5 }}>Today's ten puzzles</div>
+        <div style={{ fontSize: 11, color: T.faint, marginTop: 2 }}>Everyone gets the same ten spots — they vanish at midnight.</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
           {[["Daily drill", drillCount], ["Ten-hand session", sessCount]].map(([label, count]) => (
             <div key={label}>
@@ -3430,139 +3714,139 @@ function ReplayScreen({ hand, back }) {
 /* ============================ LEARN & PROFILE ============================ */
 
 function LearnScreen({ progress, openModule, focusLeaks, onTrainer, ratingHistory, trainerState }) {
-  const [expandedId, setExpandedId] = React.useState(null);
-  const recIds = (focusLeaks || []).map((l) => l.module);
   const frontier = getFrontier(progress);
   const totalModules = CURRICULUM_ORDER.length;
   const doneTotal = CURRICULUM_ORDER.filter((id) => progress[id]).length;
-
+  const recIds = (focusLeaks || []).map((l) => l.module).filter((id) => MODULE_INDEX[id]);
+  const due = dueReviews(trainerState || {});
+  const mastery = (trainerState && trainerState.mastery) || {};
+  const frontierRef = React.useRef(null);
+  React.useEffect(() => {
+    // land the user on their current node, Duolingo-style
+    const t = setTimeout(() => { if (frontierRef.current) frontierRef.current.scrollIntoView({ block: "center" }); }, 80);
+    return () => clearTimeout(t);
+  }, []);
+  let gi = 0; // global node index drives the serpentine offset
   return (
-    <div style={{ padding: "calc(24px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: "calc(24px + env(safe-area-inset-top)) 18px 96px", height: "100%", overflowY: "auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <div className="serif" style={{ fontSize: 27, color: T.card }}>Learn</div>
         <span className="mono" style={{ fontSize: 12, color: T.faint }}>{doneTotal}/{totalModules} modules</span>
       </div>
-
-      {/* Overall progress bar */}
-      <div style={{ height: 4, borderRadius: 2, background: "rgba(201,165,70,0.08)", margin: "10px 0 18px" }}>
-        <div style={{ height: "100%", width: `${(doneTotal / totalModules) * 100}%`, background: T.brass, borderRadius: 2, transition: "width .5s" }} />
+      <div style={{ height: 4, borderRadius: 2, background: "rgba(201,165,70,0.08)", margin: "10px 0 14px" }}>
+        <div style={{ height: "100%", width: `${(doneTotal / totalModules) * 100}%`, background: `linear-gradient(90deg, ${T.brassDim}, ${T.brass})`, borderRadius: 2, transition: "width .5s" }} />
       </div>
 
-      {/* Spot trainer */}
-      <div data-tour="spot-trainer" style={{ background: "rgba(201,165,70,.07)", border: "1px solid " + T.line, borderRadius: 14, padding: 16, color: T.card }}>
-        <div className="serif" style={{ fontSize: 18, color: T.brass }}>♠ Spot trainer</div>
-        <div style={{ fontSize: 12.5, color: T.mist, marginTop: 5 }}>
-          {(focusLeaks || []).length ? "Puzzles aimed at your leaks: " + focusLeaks.slice(0, 2).map((l) => l.title.toLowerCase()).join(", ") : "Endless decision puzzles on a real table. Play the spot, take the verdict."}
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          {[["easy", "Easy"], ["medium", "Medium"], ["hard", "Hard"]].map(([lv, label]) => (
-            <button key={lv} onClick={() => onTrainer(lv)} style={{ flex: 1, padding: "9px", borderRadius: 10, border: `1px solid ${T.line}`, background: T.baize2, color: T.mist, fontWeight: 600, fontSize: 13 }}>{label}</button>
-          ))}
-        </div>
-        <div style={{ fontSize: 10.5, color: T.faint, marginTop: 8 }}>Medium adds crowded pots. Hard adds multi-street hands and bet sizing.</div>
-      </div>
-
-      {/* Leak recs */}
-      {recIds.length > 0 && (
-        <>
-          <SectionTitle>Recommended for your leaks</SectionTitle>
-          {recIds.map((id) => MODULE_INDEX[id] && (
-            <button key={id} onClick={() => openModule(id)} style={{ width: "100%", textAlign: "left", background: "rgba(194,69,62,.08)", border: "1px solid rgba(194,69,62,.3)", borderRadius: 12, padding: 13, marginBottom: 8, color: T.card, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>{MODULE_INDEX[id].title}</div>
-                <div style={{ fontSize: 11.5, color: T.mist, marginTop: 2 }}>{MODULE_INDEX[id].topic} · targets a leak</div>
-              </div>
-              <span style={{ color: T.bad, fontSize: 13 }}>→</span>
-            </button>
-          ))}
-        </>
+      {/* Spaced-repetition review due: the highest-urgency item on this screen */}
+      {due.length > 0 && (
+        <button onClick={() => onTrainer("medium")} style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 12, background: "rgba(194,69,62,.09)", border: "1px solid rgba(194,69,62,.4)", borderRadius: 12, padding: "12px 14px", marginBottom: 10, color: T.card }}>
+          <span style={{ fontSize: 20, display: "inline-block", animation: "riqDotBlink 1.8s ease infinite" }}>⏰</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700 }}>Review due today</div>
+            <div style={{ fontSize: 11.5, color: T.mist, marginTop: 2 }}>{due.slice(0, 2).map((f) => FAM_LABEL[f] || f).join(" · ")} — clear it before it fades.</div>
+          </div>
+          <span style={{ color: T.bad, fontSize: 14 }}>→</span>
+        </button>
       )}
 
-      {/* Chapter cards */}
-      <SectionTitle>Curriculum</SectionTitle>
+      {/* Spot trainer, compact entry */}
+      <div data-tour="spot-trainer" style={{ background: "rgba(201,165,70,.07)", border: "1px solid " + T.line, borderRadius: 14, padding: "13px 15px", marginBottom: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <div style={{ minWidth: 0 }}>
+            <div className="serif" style={{ fontSize: 16, color: T.brass }}>♠ Spot trainer</div>
+            <div style={{ fontSize: 11, color: T.mist, marginTop: 2 }}>{recIds.length ? "Puzzles aimed at your leaks" : "Endless graded reps, +3 🪙 each"}</div>
+          </div>
+          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+            {[["easy", "Easy"], ["medium", "Med"], ["hard", "Hard"]].map(([lv, label]) => (
+              <button key={lv} onClick={() => onTrainer(lv)} style={{ padding: "8px 12px", borderRadius: 9, border: `1px solid ${T.line}`, background: T.baize2, color: T.mist, fontWeight: 600, fontSize: 12 }}>{label}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Leak-targeted module shortcuts */}
+      {recIds.slice(0, 2).map((id) => (
+        <button key={id} onClick={() => openModule(id)} style={{ width: "100%", textAlign: "left", background: "rgba(194,69,62,.07)", border: "1px solid rgba(194,69,62,.3)", borderRadius: 12, padding: "11px 14px", marginBottom: 8, color: T.card, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600 }}>{MODULE_INDEX[id].title}</div>
+            <div style={{ fontSize: 11, color: T.mist, marginTop: 2 }}>{MODULE_INDEX[id].topic} · targets a leak</div>
+          </div>
+          <span style={{ color: T.bad, fontSize: 13, flexShrink: 0 }}>→</span>
+        </button>
+      ))}
+
+      {/* THE PATH: serpentine node trail through the curriculum */}
       {LEARN.map((ch, chIdx) => {
         const doneMods = ch.modules.filter((m) => progress[m.id]).length;
-        const pct = ch.modules.length ? doneMods / ch.modules.length : 0;
         const complete = doneMods === ch.modules.length;
         const isChLocked = !UNLOCK_ALL_FOR_TESTING && chIdx > 0 && !LEARN[chIdx - 1].modules.every((m) => progress[m.id]);
-        const isExpanded = expandedId === ch.id;
         const suitRed = ["♥", "♦"].includes(ch.suit);
-        const accentColor = suitRed ? T.cordovan : T.brass;
-
+        const accent = suitRed ? T.cordovan : T.brass;
         return (
-          <div key={ch.id} style={{ marginBottom: 10 }}>
-            <button onClick={() => setExpandedId(isExpanded ? null : ch.id)}
-              style={{ width: "100%", textAlign: "left", background: isChLocked ? "rgba(10,26,18,0.35)" : T.baize2, border: "1px solid " + (isChLocked ? "rgba(201,165,70,0.07)" : T.line), borderRadius: isExpanded ? "14px 14px 0 0" : 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, opacity: isChLocked ? 0.65 : 1 }}>
-              <div style={{ width: 38, height: 38, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isChLocked ? "rgba(94,122,107,0.12)" : complete ? "rgba(127,201,127,.15)" : `${accentColor}15`, border: `1.5px solid ${isChLocked ? T.faint : complete ? T.good : accentColor}` }}>
-                {isChLocked
-                  ? <span style={{ fontSize: 15 }}>🔒</span>
-                  : complete
-                    ? <span style={{ fontSize: 15, color: T.good }}>✓</span>
-                    : <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: accentColor }}>{ch.chapter}</span>
-                }
-              </div>
+          <div key={ch.id}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "22px 0 4px", padding: "13px 16px", borderRadius: 14, background: complete ? "rgba(127,201,127,.07)" : `linear-gradient(135deg, ${accent}22, rgba(10,26,18,.6))`, border: `1px solid ${complete ? "rgba(127,201,127,.3)" : accent + "40"}`, opacity: isChLocked ? 0.55 : 1 }}>
+              <span className="serif" style={{ fontSize: 24, color: complete ? T.good : accent, flexShrink: 0 }}>{complete ? "✓" : ch.suit}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span style={{ fontSize: 15, fontWeight: 600, color: T.card }}>{ch.title}</span>
-                  <span className="mono" style={{ fontSize: 11, color: T.faint, flexShrink: 0, marginLeft: 8 }}>{doneMods}/{ch.modules.length}</span>
-                </div>
-                <div style={{ fontSize: 11.5, color: T.mist, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.desc}</div>
-                <div style={{ height: 3, borderRadius: 2, background: "rgba(201,165,70,0.08)", marginTop: 8 }}>
-                  <div style={{ height: "100%", width: `${pct * 100}%`, background: complete ? T.good : accentColor, borderRadius: 2, transition: "width .4s" }} />
-                </div>
+                <div className="mono" style={{ fontSize: 9, color: T.faint, letterSpacing: ".16em", textTransform: "uppercase" }}>Chapter {ch.chapter}</div>
+                <div style={{ fontSize: 15.5, fontWeight: 700, color: T.card, marginTop: 1 }}>{ch.title}</div>
+                <div style={{ fontSize: 11, color: T.mist, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{isChLocked ? `Finish ${LEARN[chIdx - 1].title} to unlock` : ch.desc}</div>
               </div>
-              <span style={{ color: T.faint, fontSize: 11, flexShrink: 0 }}>{isExpanded ? "▲" : "▼"}</span>
-            </button>
+              <span className="mono" style={{ fontSize: 11, color: complete ? T.good : T.faint, flexShrink: 0 }}>{isChLocked ? "🔒" : `${doneMods}/${ch.modules.length}`}</span>
+            </div>
 
-            {isExpanded && (
-              <div style={{ background: "rgba(8,20,14,0.5)", border: "1px solid " + T.line, borderTop: "none", borderRadius: "0 0 14px 14px", overflow: "hidden" }}>
-                {isChLocked ? (
-                  <div style={{ padding: "20px 16px", textAlign: "center" }}>
-                    <div style={{ fontSize: 13.5, color: T.mist, lineHeight: 1.6 }}>
-                      Complete <span style={{ color: T.card, fontWeight: 600 }}>{LEARN[chIdx - 1].title}</span> to unlock this chapter.
-                    </div>
-                    {frontier && (
-                      <button onClick={() => openModule(frontier)}
-                        style={{ display: "inline-block", marginTop: 14, padding: "10px 22px", borderRadius: 10, background: "rgba(201,165,70,.12)", border: "1px solid " + T.line, color: T.brass, fontSize: 13, fontWeight: 600 }}>
-                        Continue where you left off →
-                      </button>
+            <div style={{ position: "relative", padding: "6px 0" }}>
+              {/* faint spine the nodes weave around */}
+              <div style={{ position: "absolute", top: 0, bottom: 0, left: "50%", width: 0, borderLeft: "2px dashed rgba(201,165,70,.1)" }} />
+              {ch.modules.map((m, i) => {
+                const idx = gi++;
+                const off = Math.round(Math.sin(idx * 1.05) * 68);
+                const done = !!progress[m.id];
+                const locked = isChLocked || isModuleLocked(m.id, progress);
+                const isCurrent = frontier === m.id && !locked;
+                const stars = mastery[m.id] || (done ? 1 : 0);
+                const size = isCurrent ? 66 : 56;
+                return (
+                  <div key={m.id} ref={isCurrent ? frontierRef : null} style={{ display: "flex", justifyContent: "center", padding: "10px 0", transform: `translateX(${off}px)`, position: "relative" }}>
+                    {isCurrent && (
+                      <div className="mono" style={{ position: "absolute", top: -8, left: "50%", animation: "riqStartFloat 1.4s ease infinite", background: T.brass, color: "#1B1505", fontWeight: 800, fontSize: 10, letterSpacing: ".14em", padding: "4px 12px", borderRadius: 8, zIndex: 3, boxShadow: "0 4px 12px rgba(0,0,0,.45)" }}>START</div>
                     )}
+                    <button onClick={() => !locked && openModule(m.id)} disabled={locked} style={{ background: "none", border: "none", padding: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, cursor: locked ? "default" : "pointer", width: 128 }}>
+                      <div style={{
+                        width: size, height: size, borderRadius: "50%",
+                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: isCurrent ? 25 : 21,
+                        background: done ? `radial-gradient(circle at 35% 30%, ${T.brass}, ${T.brassDim})` : isCurrent ? "rgba(201,165,70,.15)" : "rgba(10,26,18,.72)",
+                        border: done ? "2px solid rgba(255,244,214,.5)" : isCurrent ? `2.5px solid ${T.brass}` : `2px solid ${locked ? "rgba(94,122,107,.25)" : T.line}`,
+                        boxShadow: done ? "0 4px 14px rgba(201,165,70,.35), inset 0 2px 4px rgba(255,255,255,.25)" : isCurrent ? "0 0 22px rgba(201,165,70,.35)" : "0 3px 8px rgba(0,0,0,.4)",
+                        color: done ? "#1B1505" : locked ? T.faint : T.brass,
+                        animation: isCurrent ? "riqPulse 2s ease infinite" : "none",
+                      }}>
+                        {done ? ch.suit : locked ? "🔒" : isCurrent ? "★" : <span className="mono" style={{ fontSize: 17, fontWeight: 700 }}>{i + 1}</span>}
+                      </div>
+                      {done && (
+                        <div className="mono" style={{ fontSize: 9, color: T.brass, letterSpacing: 1 }}>{"★".repeat(Math.min(stars, 5))}{"☆".repeat(Math.max(0, 5 - stars))}</div>
+                      )}
+                      <div style={{ fontSize: 11, fontWeight: 600, color: locked ? T.faint : done ? T.mist : T.card, lineHeight: 1.25, textAlign: "center", maxWidth: 118 }}>{m.title}</div>
+                    </button>
                   </div>
-                ) : (
-                  ch.modules.map((m, i) => {
-                    const mDone = !!progress[m.id];
-                    const mLocked = !UNLOCK_ALL_FOR_TESTING && i > 0 && !progress[ch.modules[i - 1].id];
-                    const isRec = recIds.includes(m.id);
-                    return (
-                      <button key={m.id} onClick={() => openModule(m.id)}
-                        style={{ width: "100%", textAlign: "left", background: isRec ? "rgba(194,69,62,.06)" : "transparent", border: "none", borderTop: "1px solid " + T.line, padding: "13px 16px", display: "flex", alignItems: "center", gap: 12, opacity: mLocked ? 0.42 : 1 }}>
-                        <div style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: mDone ? "rgba(127,201,127,.12)" : "rgba(201,165,70,.07)", border: `1px solid ${mDone ? T.good : T.line}` }}>
-                          <span style={{ fontSize: 12, color: mDone ? T.good : mLocked ? T.faint : T.mist }}>{mDone ? "✓" : mLocked ? "🔒" : i + 1}</span>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13.5, fontWeight: 600, color: mDone ? T.good : T.card }}>{m.title}</div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-                            <span style={{ fontSize: 11, color: T.faint }}>{m.min} min{isRec ? " · targets a leak" : ""}</span>
-                            {mDone && (() => {
-                              const stars = (trainerState && trainerState.mastery && trainerState.mastery[m.id]) || 1;
-                              return (
-                                <span className="mono" style={{ fontSize: 10, color: stars >= 5 ? T.brass : T.brassDim, letterSpacing: 1 }}>
-                                  {"★".repeat(Math.min(stars, 5))}{"☆".repeat(Math.max(0, 5 - stars))}
-                                </span>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                        {!mLocked && <span style={{ color: T.faint, fontSize: 12 }}>→</span>}
-                      </button>
-                    );
-                  })
-                )}
+                );
+              })}
+              {/* chapter trophy */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "6px 0 2px", position: "relative" }}>
+                <div style={{ fontSize: 30, filter: complete ? "none" : "grayscale(1) brightness(.45)", animation: complete ? "riqShimmer 2.2s ease infinite" : "none" }}>🏆</div>
+                {complete && <div className="mono" style={{ fontSize: 9, color: T.good, letterSpacing: ".12em", marginTop: 2 }}>CHAPTER CLEAR</div>}
               </div>
-            )}
+            </div>
           </div>
         );
       })}
+
+      {/* curriculum crown */}
+      <div style={{ textAlign: "center", margin: "24px 0 8px" }}>
+        <div style={{ fontSize: 42, filter: doneTotal === totalModules ? "none" : "grayscale(1) brightness(.4)" }}>👑</div>
+        <div className="serif" style={{ fontSize: 16, color: doneTotal === totalModules ? T.brass : T.faint, marginTop: 6 }}>
+          {doneTotal === totalModules ? "Curriculum complete — you're the real deal." : `${totalModules - doneTotal} module${totalModules - doneTotal !== 1 ? "s" : ""} between you and the crown`}
+        </div>
+      </div>
     </div>
   );
 }
@@ -3904,7 +4188,7 @@ function ModuleScreen({ moduleId, back, progress, onExercises, openModule, onCom
       const multiplier = peakCombo >= 5 ? 2.0 : peakCombo >= 3 ? 1.5 : 1.0;
       const flawless = mistakes === 0 && !alreadyDone;
       const earned = Math.round(baseEarned * multiplier * (flawless ? 1.5 : 1.0));
-      if (onComplete) onComplete(moduleId, earned, alreadyDone);
+      if (onComplete) onComplete(moduleId, earned, alreadyDone, peakCombo);
       setFinished(true);
     } else {
       setStepIdx((i) => i + 1);
@@ -4171,17 +4455,6 @@ function ProfileScreen({ user, rating, ratingHistory, sessions, progress, answer
   const agg = { hands: lifetime.hands, net: lifetime.net };
   const modsDone = Object.keys(progress).length;
   const ts = tendencies && tendencies.trainer ? tendencies.trainer : trainer || {};
-  const badges = [
-    { e: "♠", t: "First deal", got: agg.hands > 0 },
-    { e: "♦", t: "Student", got: modsDone >= 1 },
-    { e: "♥", t: "Winning session", got: sessions.some((s) => s.stats.net > 0) },
-    { e: "♣", t: "Grinder", got: agg.hands >= 50 },
-  ];
-  const rareBadges = [
-    { e: "🛡", t: "Iron streak", sub: "30-day streak", got: (ts.bestStreak || 0) >= 30 },
-    { e: "✦", t: "Clean hundred", sub: "100 right calls in a row", got: (ts.cleanBest || 0) >= 100 },
-    { e: "♛", t: "Shark slayer", sub: "Conquer The Sharks", got: !!progress["tier-unlock-3"] && sessions.some((s) => s.stats.net > 0) },
-  ];
   const W = 320, H = 90;
   const lo = Math.min(...ratingHistory) - 30, hi = Math.max(...ratingHistory) + 30;
   const yOf = (v) => H - ((v - lo) / Math.max(1, hi - lo)) * H;
@@ -4190,10 +4463,11 @@ function ProfileScreen({ user, rating, ratingHistory, sessions, progress, answer
     <div style={{ padding: "calc(24px + env(safe-area-inset-top)) 18px 80px", height: "100%", overflowY: "auto" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <div className="serif" style={{ width: 56, height: 56, borderRadius: "50%", background: T.baize2, border: "2px solid " + T.brass, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, color: T.brass }}>{user.name[0].toUpperCase()}</div>
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div className="serif" style={{ fontSize: 23, color: T.card }}>{user.name}</div>
-          <div style={{ fontSize: 12, color: T.faint }}>{tierOf(rating)} · {answers.exp || "Player"}</div>
+          <div style={{ fontSize: 12, color: T.faint }}>Level {levelInfo(xpTotalOf(trainer)).level} · {tierOf(rating)} · {answers.exp || "Player"}</div>
         </div>
+        <LevelRing ts={trainer} size={46} />
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 18, padding: "12px 16px", background: T.baize2, border: "1px solid " + T.line, borderRadius: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -4307,24 +4581,26 @@ function ProfileScreen({ user, rating, ratingHistory, sessions, progress, answer
           </>
         );
       })()}
-      <SectionTitle>Badges</SectionTitle>
-      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-        {rareBadges.map((b) => (
-          <div key={b.t} style={{ flex: 1, textAlign: "center", background: b.got ? "rgba(201,165,70,.1)" : T.baize2, border: "1px solid " + (b.got ? T.brass : T.line), borderRadius: 12, padding: "12px 4px", opacity: b.got ? 1 : 0.4 }}>
-            <div style={{ fontSize: 20 }}>{b.e}</div>
-            <div style={{ fontSize: 10, color: b.got ? T.brass : T.mist, marginTop: 4, fontWeight: 700 }}>{b.t}</div>
-            <div style={{ fontSize: 8.5, color: T.faint, marginTop: 2 }}>{b.sub}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        {badges.map((b) => (
-          <div key={b.t} style={{ flex: 1, textAlign: "center", background: T.baize2, border: "1px solid " + T.line, borderRadius: 12, padding: "12px 4px", opacity: b.got ? 1 : 0.32 }}>
-            <div style={{ fontSize: 22, color: ["♥", "♦"].includes(b.e) ? T.cordovan : T.brass }}>{b.e}</div>
-            <div style={{ fontSize: 10, color: T.mist, marginTop: 4 }}>{b.t}</div>
-          </div>
-        ))}
-      </div>
+      {(() => {
+        const got = (trainer && trainer.badges) || {};
+        const earned = BADGES.filter((b) => got[b.id]).length;
+        return (
+          <>
+            <SectionTitle right={<span className="mono" style={{ fontSize: 10, color: earned > 0 ? T.brass : T.faint }}>{earned}/{BADGES.length}</span>}>Badge case</SectionTitle>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+              {BADGES.map((b) => {
+                const has = !!got[b.id];
+                return (
+                  <div key={b.id} title={b.desc + (has ? ` — earned ${got[b.id]}` : "")} style={{ textAlign: "center", padding: "10px 3px 8px", borderRadius: 12, background: has ? "rgba(201,165,70,.1)" : "rgba(10,26,18,.5)", border: `1px solid ${has ? "rgba(201,165,70,.42)" : T.line}`, opacity: has ? 1 : 0.42 }}>
+                    <div style={{ fontSize: 20, filter: has ? "none" : "grayscale(1) brightness(.6)" }}>{b.icon}</div>
+                    <div style={{ fontSize: 8.5, color: has ? T.brass : T.faint, marginTop: 4, fontWeight: 700, lineHeight: 1.25 }}>{b.name}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        );
+      })()}
       <Btn kind="danger" onClick={onSignOut} style={{ width: "100%", marginTop: 16 }}>Sign out</Btn>
       <div style={{ marginTop: 32, paddingTop: 20, borderTop: "1px solid rgba(194,69,62,.18)" }}>
         <div style={{ fontSize: 11, color: T.faint, textAlign: "center", marginBottom: 10, lineHeight: 1.5 }}>
@@ -5657,6 +5933,27 @@ export default function App() {
     setTrainerState(next);
     if (profile) dbUpdate("users", `id=eq.${profile.id}`, { trainer_state: next });
   }, [profile]);
+  const [celebration, setCelebration] = useState(null);
+  const [badgeQueue, setBadgeQueue] = useState([]);
+  // Central reward pipeline: every trainer-state commit sweeps the badge catalog and
+  // detects level-ups. deferSave skips the DB write for high-frequency events (per hand);
+  // the next saveTrainer call persists the accumulated state.
+  const commitTrainer = useCallback((next, opts = {}) => {
+    const prevLevel = levelInfo(xpTotalOf(trainerRef.current)).level;
+    const ctx = { ...badgeCtx(next, opts.lifetime || lifetime, opts.progress || progress, opts.streak != null ? opts.streak : streak, opts.rating != null ? opts.rating : rating), active: true };
+    const [withBadges, fresh] = checkBadges(next, ctx);
+    if (opts.deferSave) { trainerRef.current = withBadges; setTrainerState(withBadges); }
+    else saveTrainer(withBadges);
+    if (fresh.length) setBadgeQueue((q) => [...q, ...fresh]);
+    const newLevel = levelInfo(xpTotalOf(withBadges)).level;
+    if (newLevel > prevLevel) setCelebration((c) => c || { type: "level", level: newLevel });
+  }, [saveTrainer, lifetime, progress, streak, rating]);
+  const onClaimQuest = useCallback((id) => {
+    const [ts, reward] = claimQuest(trainerRef.current, id);
+    if (!reward) return;
+    haptic("medium");
+    commitTrainer(ts);
+  }, [commitTrainer]);
   const dbSessionRef = useRef(null);
   useEffect(() => { dbSessionRef.current = dbSessionId; }, [dbSessionId]);
 
@@ -5926,6 +6223,12 @@ export default function App() {
       headline,
       wentToShowdown: game.wentToShowdown,
     }]);
+    // quest progress per hand (deferred DB write; endSession persists)
+    {
+      let ts = bumpQuest(trainerRef.current, "hands", 1);
+      if (net > 0) ts = bumpQuest(ts, "wins", 1);
+      commitTrainer(ts, { deferSave: true, lifetime: { hands: lifetime.hands + 1 } });
+    }
     const sid = dbSessionRef.current;
     if (sid) {
       const streets = { 0: "preflop", 3: "flop", 4: "turn", 5: "river" };
@@ -6010,11 +6313,14 @@ export default function App() {
       if (profile) dbUpsert("learn_progress", { user_id: profile.id, module_id: key, completed_at: new Date().toISOString(), drill_score: 100 }, "user_id,module_id");
     }
     if (analysis.stats.hands >= 10) setDaily((d) => ({ ...d, session: true }));
-    saveTrainer(scheduleLeakReviews({
+    commitTrainer(scheduleLeakReviews({
       ...trainerRef.current,
       decisions: (trainerRef.current.decisions || 0) + analysis.stats.decisions,
       ...(edgeState ? { phi: edgeState.phi, sigma: edgeState.sigma, rolling_var: edgeState.rollingVar, rating_n: edgeState.n } : {}),
-    }, analysis.leaks.map((l) => familyOf(l.ruleId))));
+    }, analysis.leaks.map((l) => familyOf(l.ruleId))), {
+      lifetime: { hands: lifetime.hands + analysis.stats.hands },
+      rating: newRating,
+    });
     // ---- Persist session stats + rating to Supabase; cache locally on any network failure ----
     (async () => {
       try {
@@ -6073,23 +6379,16 @@ export default function App() {
         } catch {}
       }
     })();
-  }, [hands, rating, dbSessionId, profile, lifetime.total, lastPlan, currentTier]);
+  }, [hands, rating, dbSessionId, profile, lifetime.total, lastPlan, currentTier, commitTrainer]);
 
   const openModule = (id) => { setModuleId(id); setScreen("module"); };
-  const completeModule = (id, chipsEarned = 0, isReplay = false) => {
+  const completeModule = (id, chipsEarned = 0, isReplay = false, peakCombo = 0) => {
     setProgress((p) => ({ ...p, [id]: true }));
-    const ts = { ...trainerRef.current };
-    const today = new Date().toISOString().slice(0, 10);
-    ts.xp_chips = (ts.xp_chips || 0) + chipsEarned;
-    if (ts.daily_chips_date === today) {
-      ts.daily_chips = (ts.daily_chips || 0) + chipsEarned;
-    } else {
-      ts.daily_chips = chipsEarned;
-      ts.daily_chips_date = today;
-    }
-    if (!ts.mastery) ts.mastery = {};
-    ts.mastery[id] = Math.min(5, (ts.mastery[id] || 0) + 1);
-    saveTrainer(ts);
+    let ts = awardChips(trainerRef.current, chipsEarned);
+    ts = bumpQuest(ts, "lesson", 1);
+    ts.mastery = { ...(ts.mastery || {}), [id]: Math.min(5, ((ts.mastery || {})[id] || 0) + 1) };
+    ts.bestCombo = Math.max(ts.bestCombo || 0, peakCombo);
+    commitTrainer(ts, { progress: { ...progress, [id]: true } });
     if (!isReplay && profile) {
       dbUpsert("learn_progress", { user_id: profile.id, module_id: id, completed_at: new Date().toISOString(), drill_score: 100 }, "user_id,module_id");
     }
@@ -6109,20 +6408,15 @@ export default function App() {
       if (newStreak >= d && !cos.unlocked.includes(id)) cos.unlocked.push(id);
     });
     // every 7th streak day banks a shield (max 2)
-    const ts2 = { ...trainerRef.current };
+    let ts2 = { ...trainerRef.current };
     if (newStreak > 0 && newStreak % 7 === 0) ts2.shields = Math.min(2, (ts2.shields || 0) + 1);
     ts2.bestStreak = Math.max(ts2.bestStreak || 0, newStreak);
     // Award streak chips: 20 base + up to 30 bonus scaling with streak length
     const streakBonus = 20 + Math.min(Math.floor(newStreak * 2), 30);
-    ts2.xp_chips = (ts2.xp_chips || 0) + streakBonus;
-    const todayKey2 = todayStr();
-    if (ts2.daily_chips_date === todayKey2) {
-      ts2.daily_chips = (ts2.daily_chips || 0) + streakBonus;
-    } else {
-      ts2.daily_chips = streakBonus;
-      ts2.daily_chips_date = todayKey2;
-    }
-    saveTrainer(ts2);
+    ts2 = awardChips(ts2, streakBonus);
+    commitTrainer(ts2, { streak: newStreak });
+    setCelebration({ type: "streak", streak: newStreak, chips: streakBonus });
+    haptic("heavy");
     const upd = { streak: newStreak, streak_day: todayStr(), cosmetics: cos };
     setProfile((p) => ({ ...p, ...upd }));
     setStreak(newStreak);
@@ -6180,7 +6474,7 @@ export default function App() {
 
   let body;
   if (!user) body = <AuthScreen onAuthed={handleAuthed} pendingJoin={pendingJoin} />;
-  else if (screen === "home") body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={(s) => (s === "lobby" ? setScreen("lobby") : go(s))} streak={streak} streakDay={profile?.streak_day} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} sessionHandCount={daily.session ? 10 : Math.min((lastSession ? lastSession.stats.hands : 0), 10)} profile={profile} onDailyDrill={(family) => {
+  else if (screen === "home") body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={(s) => (s === "lobby" ? setScreen("lobby") : go(s))} streak={streak} streakDay={profile?.streak_day} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} sessionHandCount={daily.session ? 10 : Math.min((lastSession ? lastSession.stats.hands : 0), 10)} profile={profile} onClaimQuest={onClaimQuest} onDailyDrill={(family) => {
     const _drillToday = new Date().toISOString().slice(0, 10);
     const _dateSeed = (() => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); })();
     const list = family ? Array.from({ length: 10 }, (_, i) => genPuzzle(mulberry32(_dateSeed + i + 1337), family, 0.6)) : dailyPuzzles();
@@ -6209,7 +6503,7 @@ export default function App() {
     setPuzzleRun({ mode: "leak", levelName, families: fams, list: [trainerPuzzle(levelName, f0, rng, trainerRef.current)], idx: 0, results: {} });
     setScreen("puzzle");
   }} />;
-  else if (screen === "module") body = <ModuleScreen moduleId={moduleId} back={() => setScreen("learn")} progress={progress} openModule={openModule} trainerState={trainerState} onComplete={(id, chips, isReplay) => completeModule(id, chips, isReplay)} onExercises={(id) => {
+  else if (screen === "module") body = <ModuleScreen moduleId={moduleId} back={() => setScreen("learn")} progress={progress} openModule={openModule} trainerState={trainerState} onComplete={(id, chips, isReplay, peakCombo) => completeModule(id, chips, isReplay, peakCombo)} onExercises={(id) => {
     const rng = mulberry32(Date.now());
     setPuzzleRun({ mode: "module", modId: id, list: [moduleExercise(id, rng, levelFor(trainerRef.current, "mod:" + id))], idx: 0, results: {}, justCompleted: false });
     setScreen("puzzle");
@@ -6221,12 +6515,15 @@ export default function App() {
         let justCompleted = r.justCompleted;
         if (r.mode === "module") {
           const key = "mod:" + r.modId;
-          const ts = recordPuzzleAnswer(trainerRef.current, key, ok);
-          saveTrainer(ts);
+          let ts = recordPuzzleAnswer(trainerRef.current, key, ok);
+          if (ok) { ts = awardChips(ts, 3); ts = bumpQuest(ts, "puzzles", 1); }
+          commitTrainer(ts);
           if (ts.famStats[key].c >= 5 && !progress[r.modId]) { completeModule(r.modId, 0, false); justCompleted = true; }
         } else {
           const fam = r.list[idx] ? r.list[idx].family : null;
-          saveTrainer(recordPuzzleAnswer(trainerRef.current, fam, ok));
+          let ts = recordPuzzleAnswer(trainerRef.current, fam, ok);
+          if (ok) { ts = awardChips(ts, 3); ts = bumpQuest(ts, "puzzles", 1); }
+          commitTrainer(ts);
         }
         return { ...r, results: { ...r.results, [idx]: ok }, justCompleted };
       });
@@ -6262,6 +6559,11 @@ export default function App() {
         // Drill is fully done — remove the partial-progress counter.
         try { localStorage.removeItem("riq_drill_count_" + _completedToday); } catch {}
         setDaily((d) => ({ ...d, drill: true, repair: d.repair || perfect }));
+        // drill quest + counters; a perfect 10/10 pays a chip bonus
+        let ts = bumpQuest(trainerRef.current, "drill", 1);
+        ts.drillsDone = (ts.drillsDone || 0) + 1;
+        if (perfect) { ts.perfectDrills = (ts.perfectDrills || 0) + 1; ts = awardChips(ts, 15); }
+        commitTrainer(ts);
       }
       if (finishedDrill) {
         // show the drill review (solo-review format) before leaving
@@ -6307,7 +6609,7 @@ export default function App() {
     setProfile((p) => ({ ...p, cosmetics: cos }));
     if (profile) dbUpdate("users", `id=eq.${profile.id}`, { cosmetics: cos });
   }} />;
-  else body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={go} streak={streak} streakDay={profile?.streak_day} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} sessionHandCount={daily.session ? 10 : Math.min((lastSession ? lastSession.stats.hands : 0), 10)} profile={profile} onDailyDrill={(family) => {
+  else body = <HomeScreen user={user} sessions={sessions} lifetime={lifetime} rating={rating} onOpenHands={() => setShowHands(true)} go={go} streak={streak} streakDay={profile?.streak_day} daily={daily} trainerState={trainerState} ratingHistory={ratingHistory} sessionHandCount={daily.session ? 10 : Math.min((lastSession ? lastSession.stats.hands : 0), 10)} profile={profile} onClaimQuest={onClaimQuest} onDailyDrill={(family) => {
     const _drillToday = new Date().toISOString().slice(0, 10);
     const _dateSeed = (() => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); })();
     const list = family ? Array.from({ length: 10 }, (_, i) => genPuzzle(mulberry32(_dateSeed + i + 1337), family, 0.6)) : dailyPuzzles();
@@ -6335,7 +6637,11 @@ export default function App() {
         {showHands && <HandRankSheet onClose={() => setShowHands(false)} />}
         {showRanges && <RangeSheet onClose={() => setShowRanges(false)} />}
         <FeedbackWidget screen={screen} profile={profile} rating={rating} />
-        {user && !["module", "mptable", "puzzle"].includes(screen) && <NavBar screen={screen} go={go} />}
+        {user && !["module", "mptable", "puzzle"].includes(screen) && (
+          <NavBar screen={screen} go={go} alerts={{ learn: dueReviews(trainerState).length > 0, home: questClaimable(trainerState) }} />
+        )}
+        {user && badgeQueue.length > 0 && !celebration && <BadgeToast badge={badgeQueue[0]} onDone={() => setBadgeQueue((q) => q.slice(1))} />}
+        {user && <CelebrationOverlay celeb={celebration} onClose={() => setCelebration(null)} />}
         {tourStep !== null && (
           <TourOverlay
             step={tourStep}

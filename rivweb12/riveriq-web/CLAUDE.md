@@ -49,6 +49,15 @@ No linter or test suite is configured.
 - Tables: see **Database Structure** section below.
 - Multiplayer uses Supabase Realtime (channel `mp_table:{id}`) polled in `MpTableScreen`.
 
+### Engagement systems (all state in `users.trainer_state` jsonb — no schema changes)
+
+- **Chips**: `xp_chips` = spendable balance, `xp_total` = lifetime earned (never decreases). `awardChips()` is the single entry point; it also feeds the daily-chips goal and the "chips" quest.
+- **Levels**: derived from `xp_total` via `levelInfo()`; `LevelRing` renders on Home/Profile; crossing a level fires a `CelebrationOverlay`.
+- **Quests**: 3/day, date-seeded from `QUEST_POOL` (`dailyQuestSet`). Progress in `trainer_state.quests {date, progress, claimed}`; bump via `bumpQuest(ts, type, n)`, claim via `claimQuest`. Wired into: hand recording (`hands`/`wins`), puzzle answers (`puzzles`), drill completion (`drill`), `completeModule` (`lesson`), `awardChips` (`chips`).
+- **Badges**: `BADGES` catalog + `checkBadges(ts, badgeCtx(...))`; earned ids stored in `trainer_state.badges {id: dateISO}`. New badges queue a `BadgeToast`. All reward mutations flow through `commitTrainer()` in `App` (badge sweep + level detection; `deferSave` skips the per-event DB write).
+- **Learn tab**: `LearnScreen` is a Duolingo-style serpentine node path (chapter banners, START bubble on the frontier module from `getFrontier`, mastery stars from `trainer_state.mastery`, trophies per chapter). A spaced-repetition "Review due" banner shows when `dueReviews()` is non-empty.
+- **Celebrations**: streak banking and level-ups render `CelebrationOverlay` (confetti); streak-at-risk banner appears on Home after 17:00 when the day isn't banked.
+
 ### Rating system
 
 - `skill_rating` (integer) stored in `users` table; displayed as RiverIQ rating.
